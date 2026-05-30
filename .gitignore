@@ -1,0 +1,75 @@
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+*.log
+
+# VS Code (giữ launch.json theo lựa chọn A)
+.vscode/*
+!.vscode/launch.json
+
+# =========================
+# Secrets / env
+# =========================
+.env
+.env.*
+!.env.example
+
+# ASP.NET Core local-only configs (tránh lộ connection string)
+appsettings.Development.json
+appsettings.*.local.json
+secrets.json
+
+*.pfx
+*.cer
+*.key
+
+# =========================
+# AI / Agent / local tooling
+# =========================
+.sixth/
+.claude/
+
+# =========================
+# Node / JS tooling (nếu dùng sau này)
+# =========================
+node_modules/
+dist/
+build/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# .NET build artifacts (chuẩn bị cho backend PA2)
+# =========================
+bin/
+obj/
+.vs/
+
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+*.nupkg
+*.snupkg
+
+# Rider / ReSharper
+.idea/
+_ReSharper*/
+*.DotSettings.user
+
+# =========================
+# Python (phòng khi dùng scripts)
+# =========================
+__pycache__/
+*.pyc
+.venv/
+venv/
