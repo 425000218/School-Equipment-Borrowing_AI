@@ -452,12 +452,26 @@ app.MapPost("/api/me/favorites", async (IConfiguration config, FavoriteRequest b
     }
 });
 
-app.MapDelete("/api/me/favorites/{deviceCode}", async (IConfiguration config, string deviceCode, string? username, CancellationToken ct) =>
+app.MapDelete("/api/me/favorites/{deviceCode}", async (HttpContext httpContext, IConfiguration config, string deviceCode, CancellationToken ct) =>
 {
     var connectionString = GetMssqlConnectionString(config);
     if (string.IsNullOrWhiteSpace(connectionString))
     {
         return Results.Problem(detail: "Missing MSSQL connection string.", statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    // Robustly obtain username: prefer querystring, fall back to headers (username or X-Username)
+    var username = httpContext.Request.Query["username"].ToString();
+    if (string.IsNullOrWhiteSpace(username))
+    {
+        if (httpContext.Request.Headers.TryGetValue("username", out var hv) && !string.IsNullOrWhiteSpace(hv.ToString()))
+        {
+            username = hv.ToString();
+        }
+        else if (httpContext.Request.Headers.TryGetValue("X-Username", out hv) && !string.IsNullOrWhiteSpace(hv.ToString()))
+        {
+            username = hv.ToString();
+        }
     }
 
     if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(deviceCode))
