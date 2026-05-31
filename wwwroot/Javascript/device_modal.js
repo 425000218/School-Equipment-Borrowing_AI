@@ -62,6 +62,12 @@ function initDeviceModal() {
 
                     <div class="modal-info-section" style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 0;">
                         <h3 style="border: none; margin-bottom: 15px; padding: 0;">Khởi tạo phiếu mượn</h3>
+                        <div class="modal-form-group" style="margin-bottom: 12px;">
+                            <label for="modal-requester">Người mượn</label>
+                            <select id="modal-requester" required style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff;">
+                                <option value="">Đang tải danh sách...</option>
+                            </select>
+                        </div>
                         <div style="display: flex; gap: 15px;">
                             <div class="modal-form-group" style="flex: 2;">
                                 <label for="modal-date">Ngày nhận mong đợi</label>
@@ -92,6 +98,37 @@ function initDeviceModal() {
     const today = new Date().toISOString().split('T')[0];
     const dateInput = document.getElementById('modal-date');
     if (dateInput) dateInput.value = today;
+
+    loadBorrowUsers().catch((error) => {
+        console.warn('Không thể tải danh sách người mượn', error);
+    });
+}
+
+async function loadBorrowUsers() {
+    const select = document.getElementById('modal-requester');
+    if (!select) return;
+
+    const response = await fetch((window.API_BASE_URL || '') + '/api/lookups/users', {
+        headers: { 'Accept': 'application/json' }
+    });
+
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const users = Array.isArray(data.users) ? data.users : [];
+
+    select.innerHTML = '<option value="">Chọn người mượn</option>';
+    users.forEach((user, index) => {
+        const option = document.createElement('option');
+        option.value = user.value;
+        option.textContent = user.label;
+        if (index === 0) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
 }
 
 // Global expose function (Sẵn sàng phục vụ nhiều trang)
@@ -149,12 +186,47 @@ window.submitModalBorrow = function() {
     const deviceId = document.getElementById('modal-btn-submit').getAttribute('data-device-id');
     const qty = document.getElementById('modal-qty').value;
     const date = document.getElementById('modal-date').value;
+    const requesterUsername = document.getElementById('modal-requester')?.value || '';
     
+    if (!requesterUsername) {
+        alert('Vui lòng chọn người mượn!');
+        return;
+    }
+
     if (qty < 1) {
         alert('Vui lòng chọn số lượng hợp lệ!');
         return;
     }
-    
-    alert(`🎉 Thành công! Phê duyệt mượn nội bộ:\n\n- Mã máy: ${deviceId}\n- Yêu cầu xuất: ${qty} cái\n- Hẹn nhận ngày: ${date}`);
-    closeModal();
+
+    fetch((window.API_BASE_URL || '') + '/api/borrow-requests', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+            requesterUsername,
+            deviceCode: deviceId,
+            quantity: Number(qty),
+            needDate: date,
+            note: ''
+        })
+    })
+        .then(async (resp) => {
+            if (!resp.ok) {
+                throw new Error(await resp.text());
+            }
+            return resp.json();
+        })
+        .then((data) => {
+            alert(`Đã tạo phiếu mượn ${data.requestNo} cho thiết bị ${data.device.name}`);
+            closeModal();
+            if (typeof window.renderBorrowHistorySidebar === 'function') {
+                window.renderBorrowHistorySidebar();
+            }
+        })
+        .catch((error) => {
+            console.error(error);
+            alert('Tạo phiếu mượn thất bại. Vui lòng thử lại.');
+        });
 };

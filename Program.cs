@@ -26,6 +26,24 @@ static async Task<List<LookupOption>> ReadLookupOptionsAsync(SqlDataReader reade
     return list;
 }
 
+static string? ReadNullableString(SqlDataReader reader, string columnName)
+{
+    var ordinal = reader.GetOrdinal(columnName);
+    return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+}
+
+static int? ReadNullableInt32(SqlDataReader reader, string columnName)
+{
+    var ordinal = reader.GetOrdinal(columnName);
+    return reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
+}
+
+static DateTime? ReadNullableDateTime(SqlDataReader reader, string columnName)
+{
+    var ordinal = reader.GetOrdinal(columnName);
+    return reader.IsDBNull(ordinal) ? null : DateTime.SpecifyKind(reader.GetDateTime(ordinal), DateTimeKind.Utc);
+}
+
 // Railway (và nhiều PaaS) cung cấp cổng chạy qua biến môi trường PORT.
 // Nếu ASPNETCORE_URLS chưa được set, ta bind Kestrel vào 0.0.0.0:PORT.
 var port = Environment.GetEnvironmentVariable("PORT");
@@ -328,6 +346,232 @@ app.MapGet("/api/devices", async (
     }
 });
 
+app.MapPost("/api/borrow-requests", async (IConfiguration config, BorrowRequestCreateRequest body, CancellationToken ct) =>
+{
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return Results.Problem(
+            detail: "Missing MSSQL connection string. Set ConnectionStrings__Mssql (recommended) or MSSQL_CONNECTION_STRING.",
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    if (string.IsNullOrWhiteSpace(body.RequesterUsername) || string.IsNullOrWhiteSpace(body.DeviceCode) || body.Quantity <= 0)
+    {
+        return Results.BadRequest(new { error = "invalid_payload" });
+    }
+
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+
+        await using var command = new SqlCommand("dbo.sp_BorrowRequests_Create", connection)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 20
+        };
+
+        command.Parameters.Add(new SqlParameter("@RequesterUsername", SqlDbType.NVarChar, 50) { Value = body.RequesterUsername.Trim() });
+        command.Parameters.Add(new SqlParameter("@DeviceCode", SqlDbType.NVarChar, 50) { Value = body.DeviceCode.Trim() });
+        command.Parameters.Add(new SqlParameter("@Quantity", SqlDbType.Int) { Value = body.Quantity });
+        command.Parameters.Add(new SqlParameter("@NeedDate", SqlDbType.Date) { Value = body.NeedDate.Date });
+        command.Parameters.Add(new SqlParameter("@Note", SqlDbType.NVarChar, -1) { Value = string.IsNullOrWhiteSpace(body.Note) ? DBNull.Value : body.Note.Trim() });
+
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return Results.Problem(detail: "borrow_request_create_failed", statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        return Results.Ok(new
+        {
+            id = reader.GetInt32(reader.GetOrdinal("id")),
+            requestNo = reader.GetString(reader.GetOrdinal("requestNo")),
+            requesterUsername = reader.GetString(reader.GetOrdinal("requesterUsername")),
+            requesterFullName = ReadNullableString(reader, "requesterFullName"),
+            needDate = reader.GetDateTime(reader.GetOrdinal("needDate")),
+            status = reader.GetString(reader.GetOrdinal("status")),
+            createdAt = reader.GetDateTime(reader.GetOrdinal("createdAt")),
+            device = new
+            {
+                code = reader.GetString(reader.GetOrdinal("deviceCode")),
+                name = reader.GetString(reader.GetOrdinal("deviceName")),
+                category = reader.GetString(reader.GetOrdinal("categoryName")),
+                subject = reader.GetString(reader.GetOrdinal("subjectName")),
+                quantity = reader.GetInt32(reader.GetOrdinal("quantity")),
+                imageUrl = ReadNullableString(reader, "imageUrl")
+            }
+        });
+    }
+    catch (SqlException ex) when (ex.Number == 50001 || ex.Number == 50002)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (SqlException ex) when (ex.Number == 2812)
+    {
+        return Results.Problem(detail: "stored_procedure_missing", statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (SqlException)
+    {
+        return Results.Problem(detail: "db_unavailable", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+app.MapGet("/api/borrow-requests", async (
+    IConfiguration config,
+    string? requesterUsername,
+    string? status,
+    CancellationToken ct) =>
+{
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return Results.Problem(
+            detail: "Missing MSSQL connection string. Set ConnectionStrings__Mssql (recommended) or MSSQL_CONNECTION_STRING.",
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    if (string.IsNullOrWhiteSpace(requesterUsername))
+    {
+        return Results.BadRequest(new { error = "missing_requester_username" });
+    }
+
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+
+        await using var command = new SqlCommand("dbo.sp_BorrowRequests_ListByUser", connection)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 20
+        };
+
+        command.Parameters.Add(new SqlParameter("@RequesterUsername", SqlDbType.NVarChar, 50) { Value = requesterUsername.Trim() });
+        command.Parameters.Add(new SqlParameter("@Status", SqlDbType.NVarChar, 20) { Value = string.IsNullOrWhiteSpace(status) ? DBNull.Value : status.Trim() });
+
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        var requests = new List<object>();
+
+        while (await reader.ReadAsync(ct))
+        {
+            requests.Add(new
+            {
+                id = reader.GetInt32(reader.GetOrdinal("id")),
+                requestNo = reader.GetString(reader.GetOrdinal("requestNo")),
+                requesterUsername = reader.GetString(reader.GetOrdinal("requesterUsername")),
+                requesterFullName = ReadNullableString(reader, "requesterFullName"),
+                needDate = reader.GetDateTime(reader.GetOrdinal("needDate")),
+                status = reader.GetString(reader.GetOrdinal("status")),
+                note = ReadNullableString(reader, "note"),
+                createdAt = reader.GetDateTime(reader.GetOrdinal("createdAt")),
+                updatedAt = reader.GetDateTime(reader.GetOrdinal("updatedAt")),
+                device = new
+                {
+                    code = reader.GetString(reader.GetOrdinal("deviceCode")),
+                    name = reader.GetString(reader.GetOrdinal("deviceName")),
+                    category = reader.GetString(reader.GetOrdinal("categoryName")),
+                    subject = reader.GetString(reader.GetOrdinal("subjectName")),
+                    quantity = reader.GetInt32(reader.GetOrdinal("quantity")),
+                    imageUrl = ReadNullableString(reader, "imageUrl")
+                }
+            });
+        }
+
+        return Results.Ok(new { requests });
+    }
+    catch (SqlException ex) when (ex.Number == 2812)
+    {
+        return Results.Problem(detail: "stored_procedure_missing", statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (SqlException)
+    {
+        return Results.Problem(detail: "db_unavailable", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+app.MapPost("/api/borrow-requests/{requestNo}/actions", async (
+    IConfiguration config,
+    string requestNo,
+    BorrowRequestActionRequest body,
+    CancellationToken ct) =>
+{
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return Results.Problem(
+            detail: "Missing MSSQL connection string. Set ConnectionStrings__Mssql (recommended) or MSSQL_CONNECTION_STRING.",
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    if (string.IsNullOrWhiteSpace(requestNo) || string.IsNullOrWhiteSpace(body.Action))
+    {
+        return Results.BadRequest(new { error = "invalid_payload" });
+    }
+
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+
+        await using var command = new SqlCommand("dbo.sp_BorrowRequests_ApplyAction", connection)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 20
+        };
+
+        command.Parameters.Add(new SqlParameter("@RequestNo", SqlDbType.NVarChar, 30) { Value = requestNo.Trim() });
+        command.Parameters.Add(new SqlParameter("@Action", SqlDbType.NVarChar, 20) { Value = body.Action.Trim() });
+        command.Parameters.Add(new SqlParameter("@ActorUsername", SqlDbType.NVarChar, 50) { Value = string.IsNullOrWhiteSpace(body.ActorUsername) ? DBNull.Value : body.ActorUsername.Trim() });
+        command.Parameters.Add(new SqlParameter("@Note", SqlDbType.NVarChar, -1) { Value = string.IsNullOrWhiteSpace(body.Note) ? DBNull.Value : body.Note.Trim() });
+
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return Results.Problem(detail: "borrow_request_action_failed", statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        return Results.Ok(new
+        {
+            requestNo = reader.GetString(reader.GetOrdinal("requestNo")),
+            status = reader.GetString(reader.GetOrdinal("status")),
+            requesterUsername = reader.GetString(reader.GetOrdinal("requesterUsername")),
+            requesterFullName = ReadNullableString(reader, "requesterFullName"),
+            needDate = reader.GetDateTime(reader.GetOrdinal("needDate")),
+            note = ReadNullableString(reader, "note"),
+            createdAt = reader.GetDateTime(reader.GetOrdinal("createdAt")),
+            updatedAt = reader.GetDateTime(reader.GetOrdinal("updatedAt")),
+            approvedAt = ReadNullableDateTime(reader, "approvedAt"),
+            checkedOutAt = ReadNullableDateTime(reader, "checkedOutAt"),
+            returnedAt = ReadNullableDateTime(reader, "returnedAt"),
+            device = new
+            {
+                code = reader.GetString(reader.GetOrdinal("deviceCode")),
+                name = reader.GetString(reader.GetOrdinal("deviceName")),
+                category = reader.GetString(reader.GetOrdinal("categoryName")),
+                subject = reader.GetString(reader.GetOrdinal("subjectName")),
+                quantity = reader.GetInt32(reader.GetOrdinal("quantity")),
+                imageUrl = ReadNullableString(reader, "imageUrl")
+            }
+        });
+    }
+    catch (SqlException ex) when (ex.Number == 50003 || ex.Number == 50004)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (SqlException ex) when (ex.Number == 2812)
+    {
+        return Results.Problem(detail: "stored_procedure_missing", statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (SqlException)
+    {
+        return Results.Problem(detail: "db_unavailable", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
 app.Run();
 
 record LookupOption(string value, string label);
+record BorrowRequestCreateRequest(string RequesterUsername, string DeviceCode, int Quantity, DateTime NeedDate, string? Note);
+record BorrowRequestActionRequest(string Action, string? ActorUsername, string? Note);

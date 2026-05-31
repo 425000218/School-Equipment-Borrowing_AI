@@ -47,32 +47,15 @@ function renderCard(device) {
 }
 
 function handleBorrow(id) {
+    if (typeof window.openDeviceModalById === 'function') {
+        window.openDeviceModalById(id);
+        return;
+    }
+
     const device = allDevices.find(d => d.id === id);
     if (!device) return;
 
-    let borrowHistory = JSON.parse(localStorage.getItem('borrowHistory')) || [];
-    const borrowRecord = {
-        ...device,
-        borrowDate: new Date().toISOString(),
-    };
-    borrowHistory.push(borrowRecord);
-    localStorage.setItem('borrowHistory', JSON.stringify(borrowHistory));
-
-    alert('Đã ghi nhận mượn thiết bị: ' + device.name);
-
-    const isPersonalPage = window.location.pathname.includes('kho-ca-nhan.html');
-    if (isPersonalPage) {
-        let myDevices = JSON.parse(localStorage.getItem('myDevices')) || [];
-        myDevices = myDevices.filter(d => d.id !== id);
-        localStorage.setItem('myDevices', JSON.stringify(myDevices));
-
-        allDevices = myDevices;
-        applyFilters();
-    }
-
-    if (typeof window.renderBorrowHistorySidebar === 'function') {
-        window.renderBorrowHistorySidebar();
-    }
+    alert('Không mở được modal mượn cho: ' + device.name);
 }
 
 function handleAdd(id) {
@@ -262,35 +245,59 @@ window.renderBorrowHistorySidebar = function () {
     const listEl = document.getElementById('borrow-history-list');
     if (!listEl) return;
 
-    const borrowHistory = JSON.parse(localStorage.getItem('borrowHistory')) || [];
-    if (borrowHistory.length === 0) {
-        listEl.innerHTML = '<li style="color: #64748b; font-size: 0.9rem;">Chưa có lịch sử mượn.</li>';
+    const userSelect = document.getElementById('borrow-user-select');
+    const requesterUsername = userSelect ? userSelect.value : '';
+
+    if (!requesterUsername) {
+        listEl.innerHTML = '<li style="color: #64748b; font-size: 0.9rem;">Chọn người mượn để xem lịch sử.</li>';
         return;
     }
 
-    const recent = [...borrowHistory].reverse().slice(0, 5);
-    listEl.innerHTML = recent.map(item => {
-        const dateObj = new Date(item.borrowDate);
-        const date = dateObj.toLocaleDateString('vi-VN');
-        const time = dateObj.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    listEl.innerHTML = '<li style="color: #64748b; font-size: 0.9rem;">Đang tải lịch sử mượn...</li>';
 
-        return `
-            <li style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; display: flex; gap: 12px; align-items: flex-start;">
-                <div style="width: 44px; height: 44px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center;">
-                    <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; transform: scale(0.65);">
-                        ${item.image}
-                    </div>
-                </div>
-                <div style="flex: 1;">
-                    <div style="font-weight: 600; color: #1e293b; font-size: 0.95rem; line-height: 1.3; margin-bottom: 4px;">${item.name}</div>
-                    <div style="font-size: 0.8rem; color: #64748b; display: flex; align-items: center; gap: 4px;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                        ${time} - ${date}
-                    </div>
-                </div>
-            </li>
-        `;
-    }).join('');
+    fetch((window.API_BASE_URL || '') + `/api/borrow-requests?requesterUsername=${encodeURIComponent(requesterUsername)}`, {
+        headers: { 'Accept': 'application/json' }
+    })
+        .then(async (resp) => {
+            if (!resp.ok) {
+                throw new Error(await resp.text());
+            }
+            return resp.json();
+        })
+        .then((data) => {
+            const requests = Array.isArray(data.requests) ? data.requests : [];
+            if (requests.length === 0) {
+                listEl.innerHTML = '<li style="color: #64748b; font-size: 0.9rem;">Chưa có phiếu mượn nào.</li>';
+                return;
+            }
+
+            listEl.innerHTML = requests.slice(0, 5).map((item) => {
+                const dateObj = new Date(item.createdAt);
+                const date = dateObj.toLocaleDateString('vi-VN');
+                const time = dateObj.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                return `
+                    <li style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; display: flex; gap: 12px; align-items: flex-start;">
+                        <div style="width: 44px; height: 44px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center;">
+                            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; transform: scale(0.65);">
+                                ${item.device?.imageUrl ? `<img src="${item.device.imageUrl}" alt="${item.device.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />` : ''}
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: #1e293b; font-size: 0.95rem; line-height: 1.3; margin-bottom: 4px;">${item.device?.name || 'Thiết bị'}</div>
+                            <div style="font-size: 0.8rem; color: #64748b; margin-bottom: 2px;">Phiếu: ${item.requestNo} · SL: ${item.device?.quantity || 1} · ${item.status}</div>
+                            <div style="font-size: 0.8rem; color: #64748b; display: flex; align-items: center; gap: 4px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                ${time} - ${date}
+                            </div>
+                        </div>
+                    </li>
+                `;
+            }).join('');
+        })
+        .catch((error) => {
+            console.error(error);
+            listEl.innerHTML = '<li style="color: #ef4444; font-size: 0.9rem;">Không tải được lịch sử mượn.</li>';
+        });
 };
 
 document.addEventListener('DOMContentLoaded', async () => {

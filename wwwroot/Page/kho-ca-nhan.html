@@ -57,6 +57,9 @@
             <div id="app" class="kho-app">
                 <aside class="sidebar">
                     <h3 class="kho-search-wrap">Lịch sử mượn gần đây</h3>
+                    <select id="borrow-user-select" class="kho-select" style="margin-bottom: 12px; width: 100%;">
+                        <option value="">Đang tải người dùng...</option>
+                    </select>
                     <ul id="borrow-history-list" class="borrow-list">
                         <li class="borrow-empty">Chưa có lịch sử mượn.</li>
                     </ul>
@@ -120,6 +123,31 @@
                         const opt = document.createElement('option');
                         opt.value = s.value; opt.textContent = s.label; subj.appendChild(opt);
                     });
+                }
+
+                const userResp = await fetch((window.API_BASE_URL || '') + '/api/lookups/users');
+                if (userResp.ok) {
+                    const usersData = await userResp.json();
+                    const userSelect = document.getElementById('borrow-user-select');
+                    if (userSelect && Array.isArray(usersData.users)) {
+                        userSelect.innerHTML = '';
+                        usersData.users.forEach((u, index) => {
+                            const opt = document.createElement('option');
+                            opt.value = u.value;
+                            opt.textContent = u.label;
+                            if (index === 0) opt.selected = true;
+                            userSelect.appendChild(opt);
+                        });
+                        userSelect.addEventListener('change', () => {
+                            if (typeof window.renderBorrowHistorySidebar === 'function') {
+                                window.renderBorrowHistorySidebar();
+                            }
+                        });
+                    }
+                }
+
+                if (typeof window.renderBorrowHistorySidebar === 'function') {
+                    window.renderBorrowHistorySidebar();
                 }
             }catch(e){console.warn(e)}
         })();
