@@ -1,42 +1,39 @@
-# =========================
-# OS / Editor
-# =========================
+# --- Cấu hình .NET & Visual Studio ---
+[Bb]in/
+[Oo]bj/
+.vs/
+.vscode/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+# --- Cấu hình môi trường & hệ điều hành ---
 .DS_Store
 Thumbs.db
 ehthumbs.db
-Desktop.ini
 
+# --- Cấu hình cá nhân & Log ---
+appsettings.Development.json
 *.log
+*.tmp
+*.bak
 
-# VS Code (giữ launch.json theo lựa chọn A)
-.vscode/*
-!.vscode/launch.json
-
-# =========================
-# Secrets / env
-# =========================
+# --- Secrets / env ---
 .env
 .env.*
 !.env.example
-
-# ASP.NET Core local-only configs (tránh lộ connection string)
-appsettings.Development.json
 appsettings.*.local.json
 secrets.json
-
 *.pfx
 *.cer
 *.key
 
-# =========================
-# AI / Agent / local tooling
-# =========================
+# --- AI / Agent / local tooling ---
 .sixth/
 .claude/
 
-# =========================
-# Node / JS tooling (nếu dùng sau này)
-# =========================
+# --- Node / JS tooling ---
 node_modules/
 dist/
 build/
@@ -46,29 +43,16 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# =========================
-# .NET build artifacts (chuẩn bị cho backend PA2)
-# =========================
-bin/
-obj/
-.vs/
-
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
-
+# --- Additional .NET artifacts ---
 *.nupkg
 *.snupkg
 
-# Rider / ReSharper
+# --- Rider / ReSharper ---
 .idea/
 _ReSharper*/
 *.DotSettings.user
 
-# =========================
-# Python (phòng khi dùng scripts)
-# =========================
+# --- Python ---
 __pycache__/
 *.pyc
 .venv/
