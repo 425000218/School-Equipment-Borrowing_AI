@@ -479,17 +479,31 @@ Lưu ý: `.gitignore` **không tự gỡ** file đã “tracked”. Nếu bạn 
 ---
 
 # **Lộ trình triển khai theo bước (mỗi bước xong bạn duyệt mới làm tiếp)**
-**Bước 1 — Repo hygiene (nhanh, an toàn)**
-- Tạo .gitignore theo đúng danh sách trên
-- (Tuỳ chọn) gỡ track launch.json và ignore .vscode
+**Bước 1 — Repo hygiene (✅ DONE — commit `75c1823`)**
+- Đã tạo `.gitignore` (giữ `.vscode/launch.json` theo lựa chọn A)
 
-**Bước 2 — Dựng backend tối thiểu (Railway chạy được ngay)**
-- Thêm dự án ASP.NET Core (serve static site hiện tại + có `GET /api/health`)
-- Thêm Dockerfile để Railway build/run ổn định
+**Bước 2 — Dựng backend tối thiểu (✅ DONE — commit `b960e72`)**
+- Đã thêm dự án ASP.NET Core (.NET 8) và serve static site từ `wwwroot/`
+- Đã có endpoint `GET /api/health`
 
-**Bước 3 — Kết nối DB SmarterASP (test sớm rủi ro network)**
-- Thêm config connection string qua Railway Variables
-- Thêm `GET /api/db/ping` gọi `sp_Health_Ping`
+**Bước 3 — Kết nối DB SmarterASP (✅ DONE phần code — commit `89e4cc3`)**
+- Đã thêm package `Microsoft.Data.SqlClient` và cấu hình `ConnectionStrings:Mssql`
+- Đã có endpoint `GET /api/db/ping` (chỉ gọi stored procedure `dbo.sp_Health_Ping`)
+- Đã thêm script tạo stored procedure: `db/001_sp_Health_Ping.sql`
+
+**Việc bạn cần làm để hoàn tất Bước 3 (manual)**
+- [ ] Trên SmarterASP (SQL Server): chạy `db/001_sp_Health_Ping.sql` trong đúng database
+- [ ] Trên Railway Variables: set `ConnectionStrings__Mssql` (khuyến nghị) hoặc `MSSQL_CONNECTION_STRING`
+- [ ] Test: `https://<railway-domain>/api/db/ping` (kỳ vọng `db.ok=true`)
+
+Ví dụ connection string (placeholder, KHÔNG phải secret):
+```
+Server=<host>,1433;Database=<db>;User ID=<user>;Password=<pass>;Encrypt=True;TrustServerCertificate=True;
+```
+
+Nếu gặp lỗi TLS/SSL hoặc chứng chỉ không hợp lệ:
+- Thử thêm `TrustServerCertificate=True` (khuyến nghị hơn)
+- Hoặc tạm thời `Encrypt=False` để test nhanh
 
 **Bước 4 — Lookup cho toàn bộ select**
 - API `/api/lookups/...` gọi stored procedures
