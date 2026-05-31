@@ -458,6 +458,43 @@ app.MapPost("/api/auth/logout", (HttpContext httpContext) =>
     return Results.Ok(new { ok = true });
 });
 
+// Admin: clear login lockout state for a user or all users
+app.MapPost("/api/admin/clear-lockout", (HttpContext httpContext, IConfiguration config, ClearLockoutRequest body) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (!string.Equals(authUser.Role, "admin", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    if (body is null)
+    {
+        return Results.BadRequest(new { error = "invalid_payload" });
+    }
+
+    if (!string.IsNullOrWhiteSpace(body.Username))
+    {
+        var key = NormalizeLoginKey(body.Username);
+        if (string.IsNullOrWhiteSpace(key)) return Results.BadRequest(new { error = "invalid_username" });
+        LoginThrottleStore.StateByUser.TryRemove(key, out _);
+        return Results.Ok(new { ok = true, cleared = key });
+    }
+
+    // clear all when admin explicitly requests
+    if (body.ClearAll)
+    {
+        LoginThrottleStore.StateByUser.Clear();
+        return Results.Ok(new { ok = true, clearedAll = true });
+    }
+
+    return Results.BadRequest(new { error = "invalid_payload" });
+});
+
 // DB connectivity check (Bước 3): chỉ gọi stored procedure
 app.MapGet("/api/db/ping", async (IConfiguration config, CancellationToken ct) =>
 {
@@ -1247,6 +1284,7 @@ record LookupOption(string value, string label);
 record LoginRequest(string Username, string Password, bool Remember);
 record AuthUser(string Username, string Role, DateTimeOffset ExpiresAtUtc);
 record LoginFailureResult(bool IsLocked, int RetryAfterSeconds, int CurrentFailedCount);
+record ClearLockoutRequest(string? Username, bool ClearAll);
 
 sealed class LoginThrottleState
 {
