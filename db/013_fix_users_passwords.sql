@@ -1,6 +1,6 @@
 -- Fix password_hash for demo users gv-a and gv-b
--- Fill in a temporary password when running this script locally or on SmarterASP.
--- Do not commit the real password or hash into git.
+-- IMPORTANT: dbo.users.password_hash is stored as text (NVARCHAR/VARCHAR), not VARBINARY.
+-- Do NOT use CONVERT(VARBINARY(...), ...) here.
 
 SET NOCOUNT ON;
 GO
@@ -23,6 +23,13 @@ WHEN MATCHED THEN
     UPDATE SET
         tgt.password_hash = src.new_hash,
         tgt.status = N'active';
+
+-- If you already ran a wrong VARBINARY update, re-run this script after replacing the placeholder.
+-- Example (for password 123456 only):
+-- UPDATE dbo.users
+-- SET password_hash = CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', N'123456'), 2),
+--     status = N'active'
+-- WHERE username IN (N'gv-a', N'gv-b');
 
 -- Optional: show the updated rows for verification
 SELECT username, full_name, role, status, password_hash
