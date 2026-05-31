@@ -191,6 +191,21 @@ function setupFilters() {
     if (filterSubject) filterSubject.addEventListener('change', applyFilters);
 }
 
+async function resolveDeviceCatalog() {
+    if (window.DEVICES_DATA_PROMISE && typeof window.DEVICES_DATA_PROMISE.then === 'function') {
+        const devices = await window.DEVICES_DATA_PROMISE;
+        if (Array.isArray(devices)) {
+            return devices;
+        }
+    }
+
+    if (Array.isArray(window.DEVICES_DATA)) {
+        return window.DEVICES_DATA;
+    }
+
+    return [];
+}
+
 function applyFilters() {
     const checkedBoxes = Array.from(document.querySelectorAll('.filter-checkbox:checked'));
     let selectedCategories = checkedBoxes.filter(cb => cb.dataset.type === 'category').map(cb => cb.value);
@@ -284,8 +299,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderSkeleton();
 
         try {
-            await new Promise(resolve => setTimeout(resolve, 600));
-
             const isPersonalPage = window.location.pathname.includes('kho-ca-nhan.html');
 
             // Load lookups (categories + subjects) from API
@@ -315,10 +328,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     window.renderBorrowHistorySidebar();
                 }
             } else {
-                if (!Array.isArray(window.DEVICES_DATA)) {
-                    throw new Error('Thiếu dữ liệu DEVICES_DATA trong JS');
-                }
-                allDevices = window.DEVICES_DATA;
+                allDevices = await resolveDeviceCatalog();
             }
 
             applyFilters();

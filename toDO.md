@@ -1,3 +1,28 @@
+# Todo List (cập nhật)
+
+- [x] Rà soát select/checkbox cần lookup
+- [x] Tạo bảng+seed lookup (SQL)
+- [x] Tạo stored procedures lookup (SQL)
+- [x] Thêm API `/api/lookups/*`
+- [x] Sửa JS render options/checkbox
+- [x] Cập nhật toDO + commit/push Step 4
+
+## Next manual steps (Bước 4) — việc bạn cần làm tay
+1. Trên SmarterASP (SQL Server): chạy theo thứ tự các script trong `db/`:
+  - `db/002_tables_lookups.sql`
+  - `db/003_seed_lookups.sql`
+  - `db/004_sp_Lookups.sql`
+2. Sau khi chạy xong, kiểm tra các endpoint từ Railway hoặc local:
+  - `GET /api/lookups/device-filters`
+  - `GET /api/lookups/room-booking`
+  - `GET /api/lookups/users`
+3. Nếu response lỗi, chụp lại JSON/HTTP status và gửi cho mình.
+4. Khi lookups OK: báo mình để mình triển khai `sp_Devices_Search` + `GET /api/devices` và thay `devices_data.js`.
+
+Mình giữ phần log và lịch sử cũ phía dưới để tham chiếu.
+
+---
+
 User: check lại liên kết giữa các trang khi ấn nav bar của từng trang, tôi thấy 1 số trang ko liên kết
 
 GitHub Copilot: Optimized tool selectionMình sẽ rà soát toàn bộ các file HTML trong thư mục Page, đối chiếu phần `<nav>` và sửa lại `href` theo đúng đường dẫn tương đối (trang gốc vs trang nằm trong Page). Sau đó mình sẽ quét lại để chắc chắn không còn link sai.
@@ -46,19 +71,6 @@ Generating patch (112 lines) in [](file:///c%3A/LEARN/School-Equipment-Borrowing
 ```
 
 ```
-
-```
-
-```
-
-```
-
-```
-
-```
-
-```
-
 ```
 
 
@@ -590,17 +602,6 @@ Generating patch (66 lines) in [](file:///c%3A/LEARN/School-Equipment-Borrowing/
 
 ```
 
-```
-
-```
-
-```
-
-```
-
-```
-
-```
 
 
 Starting: *Chuyển frontend vào wwwroot* (2/4)
