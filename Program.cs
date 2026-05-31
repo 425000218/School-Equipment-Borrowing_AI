@@ -469,6 +469,53 @@ app.MapPost("/api/me/favorites", async (IConfiguration config, FavoriteRequest b
     }
 });
 
+// Fallback delete endpoint (POST) to support environments that restrict DELETE payloads
+app.MapPost("/api/me/favorites/remove", async (IConfiguration config, FavoriteRequest body, CancellationToken ct) =>
+{
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return Results.Problem(detail: "Missing MSSQL connection string.", statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    if (body is null || string.IsNullOrWhiteSpace(body.Username) || string.IsNullOrWhiteSpace(body.DeviceCode))
+    {
+        return Results.BadRequest(new { error = "invalid_payload" });
+    }
+
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+
+        await using var command = new SqlCommand("dbo.sp_MyDevices_Remove", connection)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 15
+        };
+
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = body.Username.Trim() });
+        command.Parameters.Add(new SqlParameter("@DeviceCode", SqlDbType.NVarChar, 50) { Value = body.DeviceCode.Trim() });
+
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return Results.Problem(detail: "favorite_remove_failed", statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        var deleted = reader.GetInt32(0);
+        return Results.Ok(new { deleted });
+    }
+    catch (SqlException ex) when (ex.Number == 2812)
+    {
+        return Results.Problem(detail: "stored_procedure_missing", statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (SqlException)
+    {
+        return Results.Problem(detail: "db_unavailable", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
 app.MapDelete("/api/me/favorites/{deviceCode}", async (HttpContext httpContext, IConfiguration config, string deviceCode, CancellationToken ct) =>
 {
     var connectionString = GetMssqlConnectionString(config);
@@ -488,6 +535,34 @@ app.MapDelete("/api/me/favorites/{deviceCode}", async (HttpContext httpContext, 
         else if (httpContext.Request.Headers.TryGetValue("X-Username", out hv) && !string.IsNullOrWhiteSpace(hv.ToString()))
         {
             username = hv.ToString();
+        }
+    }
+
+    // If still empty, try to read JSON body (some clients send username in body on DELETE)
+    if (string.IsNullOrWhiteSpace(username) && httpContext.Request.ContentLength > 0)
+    {
+        try
+        {
+            httpContext.Request.EnableBuffering();
+            using var sr = new StreamReader(httpContext.Request.Body, leaveOpen: true);
+            var bodyText = await sr.ReadToEndAsync();
+            httpContext.Request.Body.Position = 0;
+            if (!string.IsNullOrWhiteSpace(bodyText))
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(bodyText);
+                if (doc.RootElement.TryGetProperty("username", out var p) && p.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    username = p.GetString();
+                }
+                else if (doc.RootElement.TryGetProperty("Username", out p) && p.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    username = p.GetString();
+                }
+            }
+        }
+        catch
+        {
+            // ignore parse errors and continue
         }
     }
 
