@@ -83,15 +83,16 @@ GO
 -- Users (người sử dụng cho dropdown)
 MERGE dbo.users AS tgt
 USING (VALUES
-    (N'gv-a', N'GV. Nguyễn Văn A'),
-    (N'gv-b', N'GV. Trần Thị B')
-) AS src(username, full_name)
+    (N'gv-a', N'GV. Nguyễn Văn A', N'admin'),
+    (N'gv-b', N'GV. Trần Thị B', N'user')
+) AS src(username, full_name, role)
 ON tgt.username = src.username
 WHEN MATCHED THEN
     UPDATE SET
         tgt.full_name = src.full_name,
+        tgt.role = src.role,
         tgt.status = N'active'
 WHEN NOT MATCHED THEN
-    INSERT (username, full_name, status)
-    VALUES (src.username, src.full_name, N'active');
+    INSERT (username, full_name, role, status)
+    VALUES (src.username, src.full_name, src.role, N'active');
 GO

@@ -258,6 +258,46 @@ app.MapGet("/api/lookups/users", async (IConfiguration config, CancellationToken
     }
 });
 
+app.MapGet("/api/lookups/approvers", async (IConfiguration config, CancellationToken ct) =>
+{
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return Results.Problem(
+            detail: "Missing MSSQL connection string. Set ConnectionStrings__Mssql (recommended) or MSSQL_CONNECTION_STRING.",
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+
+        await using var command = new SqlCommand("dbo.sp_Lookups_ApproversForSelect", connection)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 15
+        };
+
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        var approvers = await ReadLookupOptionsAsync(reader, ct);
+
+        return Results.Ok(new { users = approvers });
+    }
+    catch (SqlException ex) when (ex.Number == 2812)
+    {
+        return Results.Problem(
+            detail: "stored_procedure_missing",
+            statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (SqlException)
+    {
+        return Results.Problem(
+            detail: "db_unavailable",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
 // Device catalog endpoint (Bước 5): chỉ gọi stored procedure
 app.MapGet("/api/devices", async (
     IConfiguration config,
@@ -645,7 +685,7 @@ app.MapPost("/api/borrow-requests", async (IConfiguration config, BorrowRequestC
             }
         });
     }
-    catch (SqlException ex) when (ex.Number == 50001 || ex.Number == 50002)
+    catch (SqlException ex) when (ex.Number == 50000)
     {
         return Results.BadRequest(new { error = ex.Message });
     }
@@ -797,7 +837,7 @@ app.MapPost("/api/borrow-requests/{requestNo}/actions", async (
             }
         });
     }
-    catch (SqlException ex) when (ex.Number == 50003 || ex.Number == 50004)
+    catch (SqlException ex) when (ex.Number == 50000)
     {
         return Results.BadRequest(new { error = ex.Message });
     }

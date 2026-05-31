@@ -28,7 +28,8 @@ BEGIN
 
     IF @RequesterFullName IS NULL
     BEGIN
-        THROW 50001, 'Requester not found', 1;
+                RAISERROR('Requester not found', 16, 1);
+                RETURN;
     END
 
     SELECT TOP (1)
@@ -48,10 +49,12 @@ BEGIN
 
     IF @DeviceName IS NULL
     BEGIN
-        THROW 50002, 'Device not found', 1;
+        RAISERROR('Device not found', 16, 1);
+        RETURN;
     END
 
-    DECLARE @RequestNo NVARCHAR(30) = CONCAT(N'BR-', FORMAT(SYSUTCDATETIME(), 'yyyyMMddHHmmss'), N'-', RIGHT(CONCAT(N'0000', CAST(ABS(CHECKSUM(NEWID())) % 10000 AS NVARCHAR(4))), 4));
+    DECLARE @RequestNo NVARCHAR(30);
+    SET @RequestNo = CONCAT(N'BR-', FORMAT(SYSUTCDATETIME(), 'yyyyMMddHHmmss'), N'-', RIGHT(CONCAT(N'0000', CAST(ABS(CHECKSUM(NEWID())) % 10000 AS NVARCHAR(4))), 4));
 
     INSERT INTO dbo.borrow_requests
     (
@@ -160,6 +163,11 @@ BEGIN
     SET NOCOUNT ON;
 
     DECLARE @NewStatus NVARCHAR(20);
+    DECLARE @PreviousStatus NVARCHAR(20);
+    DECLARE @BorrowRequestId INT;
+    DECLARE @ActorFullName NVARCHAR(150);
+    DECLARE @ActorRole NVARCHAR(20);
+    DECLARE @RequesterUsername NVARCHAR(50);
     DECLARE @Now DATETIME2(3) = SYSUTCDATETIME();
 
     SET @NewStatus = CASE LOWER(@Action)
@@ -172,22 +180,111 @@ BEGIN
 
     IF @NewStatus IS NULL
     BEGIN
-        THROW 50003, 'Invalid action', 1;
+        RAISERROR('Invalid action', 16, 1);
+        RETURN;
     END
 
-    UPDATE dbo.borrow_requests
-    SET status = @NewStatus,
-        handled_by = @ActorUsername,
-        handled_note = @Note,
-        approved_at = CASE WHEN @NewStatus = N'approved' THEN @Now ELSE approved_at END,
-        checked_out_at = CASE WHEN @NewStatus = N'checked_out' THEN @Now ELSE checked_out_at END,
-        returned_at = CASE WHEN @NewStatus = N'returned' THEN @Now ELSE returned_at END,
-        updated_at = @Now
-    WHERE request_no = @RequestNo;
+    BEGIN TRY
+        BEGIN TRAN;
 
-    IF @@ROWCOUNT = 0
+        SELECT
+            @BorrowRequestId = br.id,
+            @PreviousStatus = br.status,
+            @RequesterUsername = br.requester_username
+        FROM dbo.borrow_requests AS br WITH (UPDLOCK, ROWLOCK)
+        WHERE br.request_no = @RequestNo;
+
+        IF @BorrowRequestId IS NULL
+        BEGIN
+            RAISERROR('Request not found', 16, 1);
+            ROLLBACK TRAN;
+            RETURN;
+        END
+
+        SELECT
+            @ActorFullName = u.full_name,
+            @ActorRole = LOWER(LTRIM(RTRIM(u.role)))
+        FROM dbo.users AS u
+        WHERE u.username = @ActorUsername
+          AND u.status = N'active';
+
+        IF @ActorFullName IS NULL
+        BEGIN
+            RAISERROR('Actor not found', 16, 1);
+            ROLLBACK TRAN;
+            RETURN;
+        END
+
+        IF @ActorRole NOT IN (N'admin', N'approver')
+        BEGIN
+            RAISERROR('Actor is not allowed to approve borrow requests', 16, 1);
+            ROLLBACK TRAN;
+            RETURN;
+        END
+
+        IF NOT (
+            (@PreviousStatus = N'pending' AND @NewStatus IN (N'approved', N'rejected'))
+            OR (@PreviousStatus = N'approved' AND @NewStatus = N'checked_out')
+            OR (@PreviousStatus = N'checked_out' AND @NewStatus = N'returned')
+        )
+        BEGIN
+            RAISERROR('Invalid status transition', 16, 1);
+            ROLLBACK TRAN;
+            RETURN;
+        END
+
+        UPDATE dbo.borrow_requests
+        SET status = @NewStatus,
+            handled_by = @ActorUsername,
+            handled_note = @Note,
+            approved_at = CASE WHEN @NewStatus = N'approved' THEN @Now ELSE approved_at END,
+            checked_out_at = CASE WHEN @NewStatus = N'checked_out' THEN @Now ELSE checked_out_at END,
+            returned_at = CASE WHEN @NewStatus = N'returned' THEN @Now ELSE returned_at END,
+            updated_at = @Now
+        WHERE id = @BorrowRequestId;
+
+        INSERT INTO dbo.borrow_request_audit_logs
+        (
+            borrow_request_id,
+            request_no,
+            action,
+            previous_status,
+            new_status,
+            actor_username,
+            actor_full_name,
+            note,
+            created_at
+        )
+        VALUES
+        (
+            @BorrowRequestId,
+            @RequestNo,
+            LOWER(@Action),
+            @PreviousStatus,
+            @NewStatus,
+            @ActorUsername,
+            @ActorFullName,
+            @Note,
+            @Now
+        );
+
+        COMMIT TRAN;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK TRAN;
+        END
+
+        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR('%s', 16, 1, @ErrorMessage);
+        RETURN;
+    END CATCH
+
+    IF @BorrowRequestId IS NULL
     BEGIN
-        THROW 50004, 'Request not found', 1;
+        RAISERROR('Request not found', 16, 1);
+        RETURN;
     END
 
     SELECT

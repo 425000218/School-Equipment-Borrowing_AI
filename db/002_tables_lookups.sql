@@ -76,6 +76,7 @@ BEGIN
         password_hash NVARCHAR(255) NULL,
         full_name NVARCHAR(150) NOT NULL,
         phone NVARCHAR(30) NULL,
+        role NVARCHAR(20) NOT NULL CONSTRAINT DF_users_role DEFAULT(N'user'),
         status NVARCHAR(20) NOT NULL CONSTRAINT DF_users_status DEFAULT(N'active'),
         created_at DATETIME2(3) NOT NULL CONSTRAINT DF_users_created_at DEFAULT(SYSUTCDATETIME())
     );

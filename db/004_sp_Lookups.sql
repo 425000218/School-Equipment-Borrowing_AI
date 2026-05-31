@@ -65,3 +65,18 @@ BEGIN
     ORDER BY u.full_name;
 END
 GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_Lookups_ApproversForSelect
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        u.username AS [value],
+        u.full_name AS [label]
+    FROM dbo.users AS u
+    WHERE u.status = N'active'
+      AND LOWER(LTRIM(RTRIM(u.role))) IN (N'admin', N'approver')
+    ORDER BY u.full_name;
+END
+GO
