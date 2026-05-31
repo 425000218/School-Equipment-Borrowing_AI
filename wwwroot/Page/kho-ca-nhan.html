@@ -135,10 +135,21 @@
                             const opt = document.createElement('option');
                             opt.value = u.value;
                             opt.textContent = u.label;
-                            if (index === 0) opt.selected = true;
+                            if (sessionStorage.getItem('seb.lastBorrowUser') === u.value) {
+                                opt.selected = true;
+                            } else if (index === 0 && !userSelect.value) {
+                                opt.selected = true;
+                            }
                             userSelect.appendChild(opt);
                         });
+
+                        const rememberedUser = sessionStorage.getItem('seb.lastBorrowUser');
+                        if (rememberedUser) {
+                            userSelect.value = rememberedUser;
+                        }
+
                         userSelect.addEventListener('change', () => {
+                            sessionStorage.setItem('seb.lastBorrowUser', userSelect.value);
                             if (typeof window.renderBorrowHistorySidebar === 'function') {
                                 window.renderBorrowHistorySidebar();
                             }

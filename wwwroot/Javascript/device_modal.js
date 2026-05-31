@@ -124,11 +124,18 @@ async function loadBorrowUsers() {
         const option = document.createElement('option');
         option.value = user.value;
         option.textContent = user.label;
-        if (index === 0) {
+        if (sessionStorage.getItem('seb.lastBorrowUser') === user.value) {
+            option.selected = true;
+        } else if (index === 0 && !select.value) {
             option.selected = true;
         }
         select.appendChild(option);
     });
+
+    const rememberedUser = sessionStorage.getItem('seb.lastBorrowUser');
+    if (rememberedUser) {
+        select.value = rememberedUser;
+    }
 }
 
 // Global expose function (Sẵn sàng phục vụ nhiều trang)
@@ -219,6 +226,7 @@ window.submitModalBorrow = function() {
             return resp.json();
         })
         .then((data) => {
+            sessionStorage.setItem('seb.lastBorrowUser', requesterUsername);
             alert(`Đã tạo phiếu mượn ${data.requestNo} cho thiết bị ${data.device.name}`);
             closeModal();
             if (typeof window.renderBorrowHistorySidebar === 'function') {

@@ -246,7 +246,7 @@ window.renderBorrowHistorySidebar = function () {
     if (!listEl) return;
 
     const userSelect = document.getElementById('borrow-user-select');
-    const requesterUsername = userSelect ? userSelect.value : '';
+    const requesterUsername = (userSelect && userSelect.value) || sessionStorage.getItem('seb.lastBorrowUser') || '';
 
     if (!requesterUsername) {
         listEl.innerHTML = '<li style="color: #64748b; font-size: 0.9rem;">Chọn người mượn để xem lịch sử.</li>';
