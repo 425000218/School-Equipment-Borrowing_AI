@@ -76,18 +76,14 @@
           <div class="sidebar-block">
             <h3 class="block-title">Thông tin phòng học</h3>
             <div class="input-field">
-              <select name="room-type">
+              <select name="room-type" id="room-type-select">
                 <option value="" disabled selected>Loại phòng</option>
-                <option value="cntt">Phòng CNTT</option>
-                <option value="ly">Phòng Vật lý</option>
               </select>
               <i class="fas fa-chevron-down field-arrow"></i>
             </div>
             <div class="input-field">
-              <select name="room-number">
+              <select name="room-number" id="room-number-select">
                 <option value="" disabled selected>Số phòng</option>
-                <option value="101">101</option>
-                <option value="102">102</option>
               </select>
               <i class="fas fa-chevron-down field-arrow"></i>
             </div>
@@ -244,6 +240,35 @@
 
   <script src="../Javascript/Java.js"></script>
   <script src="../Javascript/dang-ky-phong.js"></script>
+  <script>
+    (async function(){
+      try{
+        const base = window.API_BASE_URL || '';
+        const resp = await fetch(base + '/api/lookups/room-booking');
+        if(resp.ok){
+          const data = await resp.json();
+          const rt = document.getElementById('room-type-select');
+          const rn = document.getElementById('room-number-select');
+          if(rt && Array.isArray(data.roomTypes)){
+            data.roomTypes.forEach(r => { const o = document.createElement('option'); o.value = r.value; o.textContent = r.label; rt.appendChild(o); });
+          }
+          if(rn && Array.isArray(data.rooms)){
+            data.rooms.forEach(r => { const o = document.createElement('option'); o.value = r.value; o.textContent = r.label; rn.appendChild(o); });
+          }
+        }
+
+        // users for select
+        const uresp = await fetch(base + '/api/lookups/users');
+        if(uresp.ok){
+          const ud = await uresp.json();
+          const userSel = document.querySelector('select[name="user-name"]');
+          if(userSel && Array.isArray(ud.users)){
+            ud.users.forEach(u => { const o = document.createElement('option'); o.value = u.value; o.textContent = u.label; userSel.appendChild(o); });
+          }
+        }
+      }catch(e){console.warn('Lookup load failed', e)}
+    })();
+  </script>
 </body>
 
 </html>

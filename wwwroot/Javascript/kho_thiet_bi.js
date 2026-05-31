@@ -288,6 +288,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const isPersonalPage = window.location.pathname.includes('kho-ca-nhan.html');
 
+            // Load lookups (categories + subjects) from API
+            try {
+                const resp = await fetch((window.API_BASE_URL || '') + '/api/lookups/device-filters');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    // categories -> render checkboxes
+                    const catContainer = document.getElementById('category-filters');
+                    if (catContainer && Array.isArray(data.categories)) {
+                        catContainer.innerHTML = data.categories.map(c => `\n                            <div class="filter-group kho-filter-group">\n                                <label class="kho-filter-label">\n                                    <input type="checkbox" class="filter-checkbox kho-filter-checkbox" value="${c.value}" data-type="category"> ${c.label}\n                                </label>\n                            </div>`).join('');
+                    }
+                    // subjects -> render checkboxes
+                    const subjContainer = document.getElementById('subject-filters');
+                    if (subjContainer && Array.isArray(data.subjects)) {
+                        subjContainer.innerHTML = data.subjects.map(s => `\n                            <div class="filter-group kho-filter-group">\n                                <label class="kho-filter-label">\n                                    <input type="checkbox" class="filter-checkbox kho-filter-checkbox" value="${s.value}" data-type="subject"> ${s.label}\n                                </label>\n                            </div>`).join('');
+                    }
+                }
+            } catch (e) {
+                console.warn('Không thể tải lookup categories/subjects', e);
+            }
+
             if (isPersonalPage) {
                 const stored = localStorage.getItem('myDevices');
                 allDevices = stored ? JSON.parse(stored) : [];

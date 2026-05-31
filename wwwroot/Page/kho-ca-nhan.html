@@ -67,21 +67,9 @@
                     <div class="search-bar kho-select-wrap">
                         <select id="filter-category" class="kho-select">
                             <option value="">Tất cả danh mục</option>
-                            <option value="CNTT">CNTT</option>
-                            <option value="Âm thanh">Âm thanh</option>
-                            <option value="Trình chiếu">Trình chiếu</option>
-                            <option value="Phòng lab">Phòng lab</option>
-                            <option value="Dụng cụ thực hành">Dụng cụ thực hành</option>
-                            <option value="Hóa chất">Hóa chất</option>
-                            <option value="Khác">Khác</option>
                         </select>
                         <select id="filter-subject" class="kho-select">
                             <option value="">Tất cả môn học</option>
-                            <option value="Vật lý">Vật lý</option>
-                            <option value="Hóa học">Hóa học</option>
-                            <option value="Sinh học">Sinh học</option>
-                            <option value="Tin học">Tin học</option>
-                            <option value="Chung">Khác / Dùng chung</option>
                         </select>
                     </div>
                     <div class="equipment-grid" id="equipment-grid">
@@ -112,6 +100,30 @@
     <script src="../Javascript/device_modal.js"></script>
     <script src="../Javascript/devices_data.js"></script>
     <script src="../Javascript/kho_thiet_bi.js"></script>
+
+    <script>
+        (async function(){
+            try{
+                const resp = await fetch((window.API_BASE_URL || '') + '/api/lookups/device-filters');
+                if(!resp.ok) return;
+                const data = await resp.json();
+                const cat = document.getElementById('filter-category');
+                const subj = document.getElementById('filter-subject');
+                if(cat && Array.isArray(data.categories)){
+                    data.categories.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.value; opt.textContent = c.label; cat.appendChild(opt);
+                    });
+                }
+                if(subj && Array.isArray(data.subjects)){
+                    data.subjects.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s.value; opt.textContent = s.label; subj.appendChild(opt);
+                    });
+                }
+            }catch(e){console.warn(e)}
+        })();
+    </script>
 
 </body>
 
