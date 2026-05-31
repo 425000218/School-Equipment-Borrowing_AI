@@ -90,9 +90,10 @@
             <form id="login-form">
                 <div class="field">
                     <label for="username">Người dùng</label>
-                    <select id="username" required>
+                    <input id="username" list="username-list" placeholder="gv-a hoặc chọn từ danh sách" required />
+                    <datalist id="username-list">
                         <option value="">Đang tải danh sách...</option>
-                    </select>
+                    </datalist>
                 </div>
 
                 <div class="field">
@@ -135,22 +136,35 @@
                 const data = await response.json();
                 const users = Array.isArray(data.users) ? data.users : [];
 
-                usernameSelect.innerHTML = '<option value="">Chọn người dùng</option>';
+                const list = document.getElementById('username-list');
+                list.innerHTML = '';
+                // Add helpful placeholder
+                const placeholderOpt = document.createElement('option');
+                placeholderOpt.value = '';
+                placeholderOpt.textContent = 'Chọn người dùng';
+                list.appendChild(placeholderOpt);
+
                 users.forEach((u) => {
                     const option = document.createElement('option');
+                    // Show username as value; include full name in text for some browsers
                     option.value = u.value;
-                    option.textContent = u.label;
-                    usernameSelect.appendChild(option);
+                    option.textContent = u.label ? `${u.value} — ${u.label}` : u.value;
+                    list.appendChild(option);
                 });
             } catch (error) {
                 console.error(error);
-                usernameSelect.innerHTML = '<option value="">Không tải được danh sách người dùng</option>';
+                const list = document.getElementById('username-list');
+                list.innerHTML = '';
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = 'Không tải được danh sách người dùng';
+                list.appendChild(opt);
             }
 
             form.addEventListener('submit', async function (event) {
                 event.preventDefault();
 
-                const username = (usernameSelect.value || '').trim();
+                const username = (document.getElementById('username').value || '').trim();
                 const password = (document.getElementById('password').value || '').trim();
                 if (!username || !password) {
                     window.alert('Vui lòng chọn người dùng và nhập mật khẩu.');
@@ -159,6 +173,7 @@
 
                 const result = await window.SEBAuth.login(username, password, !!remember.checked);
                 if (!result.ok) {
+                    console.error('Login failed', result);
                     if (result.status === 423 && result.error === 'account_locked') {
                         const sec = Math.max(0, Number(result.retryAfterSeconds || 0));
                         const min = Math.max(1, Math.ceil(sec / 60));
@@ -167,10 +182,19 @@
                         if (typeof result.attemptsRemaining === 'number' && result.attemptsRemaining >= 0) {
                             window.alert(`Sai tài khoản hoặc mật khẩu. Bạn còn ${result.attemptsRemaining} lần thử trước khi bị khóa 20 phút.`);
                         } else {
-                            window.alert('Sai tài khoản hoặc mật khẩu.');
+                            // Show raw server response if available for debugging
+                            if (result.rawBody) {
+                                window.alert(`Đăng nhập thất bại: ${result.rawBody}`);
+                            } else {
+                                window.alert(result.error || 'Sai tài khoản hoặc mật khẩu.');
+                            }
                         }
                     } else {
-                        window.alert('Đăng nhập thất bại. Vui lòng thử lại.');
+                        if (result.rawBody) {
+                            window.alert(`Đăng nhập thất bại: ${result.rawBody}`);
+                        } else {
+                            window.alert(result.error || 'Đăng nhập thất bại. Vui lòng thử lại.');
+                        }
                     }
                     return;
                 }

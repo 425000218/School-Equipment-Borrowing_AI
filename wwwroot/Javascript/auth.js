@@ -111,10 +111,16 @@
 
         if (!response.ok) {
             let errorPayload = null;
+            let rawText = null;
             try {
-                errorPayload = await response.json();
+                rawText = await response.text();
+                try {
+                    errorPayload = JSON.parse(rawText || 'null');
+                } catch {
+                    errorPayload = null;
+                }
             } catch {
-                errorPayload = null;
+                rawText = null;
             }
 
             return {
@@ -126,7 +132,8 @@
                     : null,
                 retryAfterSeconds: errorPayload && typeof errorPayload.retryAfterSeconds === 'number'
                     ? errorPayload.retryAfterSeconds
-                    : null
+                    : null,
+                rawBody: rawText
             };
         }
 
