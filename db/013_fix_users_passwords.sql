@@ -5,9 +5,9 @@
 SET NOCOUNT ON;
 GO
 
-DECLARE @DemoPassword NVARCHAR(200) = N'<ENTER_TEMPORARY_PASSWORD_HERE>';
+DECLARE @DemoPassword VARCHAR(200) = '<ENTER_TEMPORARY_PASSWORD_HERE>';
 
-IF @DemoPassword = N'<ENTER_TEMPORARY_PASSWORD_HERE>'
+IF @DemoPassword = '<ENTER_TEMPORARY_PASSWORD_HERE>'
 BEGIN
     THROW 50000, 'Please replace <ENTER_TEMPORARY_PASSWORD_HERE> before running this script.', 1;
 END
@@ -27,7 +27,7 @@ WHEN MATCHED THEN
 -- If you already ran a wrong VARBINARY update, re-run this script after replacing the placeholder.
 -- Example (for password 123456 only):
 -- UPDATE dbo.users
--- SET password_hash = CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', N'123456'), 2),
+-- SET password_hash = CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', '123456'), 2),
 --     status = N'active'
 -- WHERE username IN (N'gv-a', N'gv-b');
 

@@ -2,6 +2,19 @@
     const AUTH_USER_KEY = 'seb.authUser';
     const AUTH_ROLE_KEY = 'seb.authRole';
     const AUTH_FULLNAME_KEY = 'seb.authFullName';
+    const PROFILE_PATH = '/Page/profile.html';
+    const LOGIN_PATH = '/Page/dang-nhap.html';
+
+    function dispatchAuthChanged() {
+        window.dispatchEvent(new CustomEvent('seb:auth-changed', {
+            detail: {
+                isLoggedIn: isLoggedIn(),
+                user: getUser(),
+                role: getRole(),
+                fullName: getFullName()
+            }
+        }));
+    }
 
     function getQueryParam(name) {
         const params = new URLSearchParams(window.location.search);
@@ -34,6 +47,8 @@
             localStorage.removeItem(AUTH_ROLE_KEY);
             localStorage.removeItem(AUTH_FULLNAME_KEY);
         }
+
+        dispatchAuthChanged();
     }
 
     function clearSession() {
@@ -46,6 +61,8 @@
         localStorage.removeItem(AUTH_USER_KEY);
         localStorage.removeItem(AUTH_ROLE_KEY);
         localStorage.removeItem(AUTH_FULLNAME_KEY);
+
+        dispatchAuthChanged();
     }
 
     function getUser() {
@@ -72,7 +89,7 @@
 
     function buildLoginRedirectUrl() {
         const current = window.location.pathname + window.location.search;
-        return '/Page/dang-nhap.html?redirect=' + encodeURIComponent(current);
+        return LOGIN_PATH + '?redirect=' + encodeURIComponent(current);
     }
 
     function goToLogin() {
@@ -188,13 +205,97 @@
         clearSession();
     }
 
+    function updateHeaderButton(button, iconClass, label, href, onClick) {
+        if (!button) return;
+
+        button.type = 'button';
+        button.setAttribute('aria-label', label);
+        button.title = label;
+        button.innerHTML = `<i class="${iconClass}"></i>`;
+
+        button.onclick = async function () {
+            if (typeof onClick === 'function') {
+                await onClick();
+                return;
+            }
+
+            window.location.href = href;
+        };
+    }
+
+    function syncAuthUi() {
+        const headerRight = document.querySelector('.header-right');
+        if (!headerRight) return;
+
+        const buttons = headerRight.querySelectorAll('.icon-btn');
+        const userButton = buttons[0] || null;
+        const actionButton = buttons[1] || null;
+
+        const loggedIn = isLoggedIn();
+        const user = getUser();
+        const fullName = getFullName();
+        const role = getRole();
+
+        updateHeaderButton(
+            userButton,
+            loggedIn ? 'fa-solid fa-circle-user' : 'far fa-user',
+            loggedIn
+                ? `Hồ sơ ${fullName || user}`
+                : 'Đăng nhập',
+            loggedIn ? PROFILE_PATH : LOGIN_PATH
+        );
+
+        updateHeaderButton(
+            actionButton,
+            loggedIn ? 'fa-solid fa-right-from-bracket' : 'fas fa-pencil-alt',
+            loggedIn
+                ? `Đăng xuất ${fullName || user}`
+                : 'Đăng nhập hệ thống',
+            loggedIn ? LOGIN_PATH : LOGIN_PATH
+        , async function () {
+            if (loggedIn) {
+                await logout();
+                window.location.href = LOGIN_PATH;
+            } else {
+                window.location.href = LOGIN_PATH;
+            }
+        });
+
+        let statusChip = headerRight.querySelector('.seb-auth-status');
+        if (!statusChip) {
+            statusChip = document.createElement('a');
+            statusChip.className = 'seb-auth-status';
+            headerRight.appendChild(statusChip);
+        }
+
+        statusChip.href = loggedIn ? PROFILE_PATH : LOGIN_PATH;
+        statusChip.textContent = loggedIn
+            ? `${fullName || user} • ${role}`
+            : 'Chưa đăng nhập';
+        statusChip.setAttribute('aria-label', loggedIn ? `Tài khoản ${fullName || user}` : 'Chưa đăng nhập');
+        statusChip.dataset.state = loggedIn ? 'logged-in' : 'logged-out';
+    }
+
     function redirectAfterLogin(defaultPath) {
         const redirect = getQueryParam('redirect');
         if (redirect && redirect.startsWith('/')) {
             window.location.href = redirect;
             return;
         }
-        window.location.href = defaultPath || '/index.html';
+        window.location.href = defaultPath || PROFILE_PATH;
+    }
+
+    async function bootstrapAuthUi() {
+        await restoreSessionFromServer();
+        syncAuthUi();
+    }
+
+    if (typeof document !== 'undefined') {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bootstrapAuthUi, { once: true });
+        } else {
+            bootstrapAuthUi();
+        }
     }
 
     window.SEBAuth = {
@@ -207,6 +308,7 @@
         login,
         restoreSessionFromServer,
         logout,
+        syncAuthUi,
         goToLogin,
         redirectAfterLogin
     };

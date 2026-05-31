@@ -63,11 +63,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (loginBtn) {
-        loginBtn.addEventListener("click", () => openModal("login"));
+        loginBtn.addEventListener("click", (e) => {
+            if (window.SEBAuth) return;
+            openModal("login");
+        });
     }
 
     if (registerBtn) {
-        registerBtn.addEventListener("click", () => openModal("register"));
+        registerBtn.addEventListener("click", (e) => {
+            if (window.SEBAuth) return;
+            openModal("register");
+        });
     }
 
     if (closeModalBtn) {

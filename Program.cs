@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -279,7 +280,16 @@ if (!string.IsNullOrWhiteSpace(port) && string.IsNullOrWhiteSpace(aspNetCoreUrls
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 }
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 // Static frontend (multi-page) nằm trong wwwroot
 app.UseDefaultFiles();
@@ -441,12 +451,60 @@ app.MapGet("/api/auth/session", (HttpContext httpContext, IConfiguration config)
         return Results.Unauthorized();
     }
 
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return Results.Problem(
+            detail: "Missing MSSQL connection string. Set ConnectionStrings__Mssql (recommended) or MSSQL_CONNECTION_STRING.",
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    string? fullName = null;
+    string? status = null;
+    try
+    {
+        using var connection = new SqlConnection(connectionString);
+        connection.Open();
+
+        using var command = new SqlCommand(@"
+SELECT TOP (1)
+    u.full_name,
+    u.status
+FROM dbo.users AS u
+WHERE u.username = @Username;", connection)
+        {
+            CommandType = CommandType.Text,
+            CommandTimeout = 15
+        };
+
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = authUser.Username });
+
+        using var reader = command.ExecuteReader();
+        if (reader.Read())
+        {
+            fullName = ReadNullableString(reader, "full_name");
+            status = ReadNullableString(reader, "status");
+        }
+    }
+    catch (SqlException)
+    {
+        return Results.Problem(
+            detail: "db_unavailable",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    if (!string.Equals(status, "active", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.Unauthorized();
+    }
+
     return Results.Ok(new
     {
         user = new
         {
             username = authUser.Username,
             role = authUser.Role,
+            fullName,
             expiresAt = authUser.ExpiresAtUtc
         }
     });
@@ -1278,6 +1336,238 @@ app.MapPost("/api/borrow-requests/{requestNo}/actions", async (
     }
 });
 
+// Room Booking endpoints
+app.MapGet("/api/room-bookings", async (
+    HttpContext httpContext,
+    IConfiguration config,
+    string roomCode,
+    DateTime startDate,
+    DateTime endDate,
+    CancellationToken ct) =>
+{
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return Results.Problem(detail: "Missing MSSQL connection string.", statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (string.IsNullOrWhiteSpace(roomCode))
+    {
+        return Results.BadRequest(new { error = "invalid_room_code" });
+    }
+
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+
+        await using var command = new SqlCommand("dbo.sp_RoomBookings_List", connection)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 15
+        };
+
+        command.Parameters.Add(new SqlParameter("@RoomCode", SqlDbType.NVarChar, 50) { Value = roomCode.Trim() });
+        command.Parameters.Add(new SqlParameter("@StartDate", SqlDbType.Date) { Value = startDate.Date });
+        command.Parameters.Add(new SqlParameter("@EndDate", SqlDbType.Date) { Value = endDate.Date });
+
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        var bookings = new List<object>();
+
+        while (await reader.ReadAsync(ct))
+        {
+            bookings.Add(new
+            {
+                id = reader.GetInt32(reader.GetOrdinal("id")),
+                bookingNo = reader.GetString(reader.GetOrdinal("bookingNo")),
+                requesterUsername = reader.GetString(reader.GetOrdinal("requesterUsername")),
+                requesterFullName = ReadNullableString(reader, "requesterFullName"),
+                roomCode = reader.GetString(reader.GetOrdinal("roomCode")),
+                roomName = reader.GetString(reader.GetOrdinal("roomName")),
+                bookingDate = reader.GetDateTime(reader.GetOrdinal("bookingDate")),
+                slot = reader.GetString(reader.GetOrdinal("slot")),
+                purpose = ReadNullableString(reader, "purpose"),
+                status = reader.GetString(reader.GetOrdinal("status")),
+                createdAt = reader.GetDateTime(reader.GetOrdinal("createdAt"))
+            });
+        }
+
+        return Results.Ok(new { bookings });
+    }
+    catch (SqlException ex) when (ex.Number == 2812)
+    {
+        return Results.Problem(detail: "stored_procedure_missing", statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (SqlException)
+    {
+        return Results.Problem(detail: "db_unavailable", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+app.MapPost("/api/room-bookings", async (
+    HttpContext httpContext,
+    IConfiguration config,
+    RoomBookingCreateRequest body,
+    CancellationToken ct) =>
+{
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return Results.Problem(detail: "Missing MSSQL connection string.", statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (body is null || string.IsNullOrWhiteSpace(body.RoomCode) || string.IsNullOrWhiteSpace(body.Slot))
+    {
+        return Results.BadRequest(new { error = "invalid_payload" });
+    }
+
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+
+        await using var command = new SqlCommand("dbo.sp_RoomBookings_Create", connection)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 20
+        };
+
+        command.Parameters.Add(new SqlParameter("@RequesterUsername", SqlDbType.NVarChar, 50) { Value = authUser.Username });
+        command.Parameters.Add(new SqlParameter("@RoomCode", SqlDbType.NVarChar, 50) { Value = body.RoomCode.Trim() });
+        command.Parameters.Add(new SqlParameter("@BookingDate", SqlDbType.Date) { Value = body.BookingDate.Date });
+        command.Parameters.Add(new SqlParameter("@Slot", SqlDbType.NVarChar, 20) { Value = body.Slot.Trim() });
+        command.Parameters.Add(new SqlParameter("@Purpose", SqlDbType.NVarChar, -1) { Value = string.IsNullOrWhiteSpace(body.Purpose) ? DBNull.Value : body.Purpose.Trim() });
+
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return Results.Problem(detail: "room_booking_create_failed", statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        return Results.Ok(new
+        {
+            id = reader.GetInt32(reader.GetOrdinal("id")),
+            bookingNo = reader.GetString(reader.GetOrdinal("bookingNo")),
+            requesterUsername = reader.GetString(reader.GetOrdinal("requesterUsername")),
+            requesterFullName = ReadNullableString(reader, "requesterFullName"),
+            roomCode = reader.GetString(reader.GetOrdinal("roomCode")),
+            roomName = reader.GetString(reader.GetOrdinal("roomName")),
+            bookingDate = reader.GetDateTime(reader.GetOrdinal("bookingDate")),
+            slot = reader.GetString(reader.GetOrdinal("slot")),
+            purpose = ReadNullableString(reader, "purpose"),
+            status = reader.GetString(reader.GetOrdinal("status")),
+            createdAt = reader.GetDateTime(reader.GetOrdinal("createdAt"))
+        });
+    }
+    catch (SqlException ex) when (ex.Number == 50000)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (SqlException ex) when (ex.Number == 2812)
+    {
+        return Results.Problem(detail: "stored_procedure_missing", statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (SqlException)
+    {
+        return Results.Problem(detail: "db_unavailable", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+app.MapPost("/api/room-bookings/{bookingNo}/actions", async (
+    HttpContext httpContext,
+    IConfiguration config,
+    string bookingNo,
+    RoomBookingActionRequest body,
+    CancellationToken ct) =>
+{
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return Results.Problem(detail: "Missing MSSQL connection string.", statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (authUser.Role != "admin" && authUser.Role != "approver")
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    if (string.IsNullOrWhiteSpace(bookingNo) || string.IsNullOrWhiteSpace(body.Action))
+    {
+        return Results.BadRequest(new { error = "invalid_payload" });
+    }
+
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+
+        await using var command = new SqlCommand("dbo.sp_RoomBookings_ApplyAction", connection)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 20
+        };
+
+        command.Parameters.Add(new SqlParameter("@BookingNo", SqlDbType.NVarChar, 30) { Value = bookingNo.Trim() });
+        command.Parameters.Add(new SqlParameter("@Action", SqlDbType.NVarChar, 20) { Value = body.Action.Trim() });
+        command.Parameters.Add(new SqlParameter("@ActorUsername", SqlDbType.NVarChar, 50) { Value = authUser.Username });
+        command.Parameters.Add(new SqlParameter("@Note", SqlDbType.NVarChar, -1) { Value = string.IsNullOrWhiteSpace(body.Note) ? DBNull.Value : body.Note.Trim() });
+
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return Results.Problem(detail: "room_booking_action_failed", statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        return Results.Ok(new
+        {
+            id = reader.GetInt32(reader.GetOrdinal("id")),
+            bookingNo = reader.GetString(reader.GetOrdinal("bookingNo")),
+            requesterUsername = reader.GetString(reader.GetOrdinal("requesterUsername")),
+            requesterFullName = ReadNullableString(reader, "requesterFullName"),
+            roomCode = reader.GetString(reader.GetOrdinal("roomCode")),
+            roomName = reader.GetString(reader.GetOrdinal("roomName")),
+            bookingDate = reader.GetDateTime(reader.GetOrdinal("bookingDate")),
+            slot = reader.GetString(reader.GetOrdinal("slot")),
+            purpose = ReadNullableString(reader, "purpose"),
+            status = reader.GetString(reader.GetOrdinal("status")),
+            handledBy = ReadNullableString(reader, "handledBy"),
+            handledNote = ReadNullableString(reader, "handledNote"),
+            createdAt = reader.GetDateTime(reader.GetOrdinal("createdAt")),
+            updatedAt = reader.GetDateTime(reader.GetOrdinal("updatedAt"))
+        });
+    }
+    catch (SqlException ex) when (ex.Number == 50000)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (SqlException ex) when (ex.Number == 2812)
+    {
+        return Results.Problem(detail: "stored_procedure_missing", statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (SqlException)
+    {
+        return Results.Problem(detail: "db_unavailable", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
 app.Run();
 
 record LookupOption(string value, string label);
@@ -1303,3 +1593,6 @@ static class LoginThrottleStore
 record BorrowRequestCreateRequest(string RequesterUsername, string DeviceCode, int Quantity, DateTime NeedDate, string? Note);
 record BorrowRequestActionRequest(string Action, string? ActorUsername, string? Note);
 record FavoriteRequest(string Username, string DeviceCode);
+
+record RoomBookingCreateRequest(string RoomCode, DateTime BookingDate, string Slot, string? Purpose);
+record RoomBookingActionRequest(string Action, string? Note);

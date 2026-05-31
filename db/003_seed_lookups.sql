@@ -83,8 +83,8 @@ GO
 -- Users (người sử dụng cho dropdown)
 MERGE dbo.users AS tgt
 USING (VALUES
-    (N'gv-a', N'GV. Nguyễn Văn A', N'admin', CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', N'123456'), 2)),
-    (N'gv-b', N'GV. Trần Thị B', N'user', CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', N'123456'), 2))
+    (N'gv-a', N'GV. Nguyễn Văn A', N'admin', CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', '123456'), 2)),
+    (N'gv-b', N'GV. Trần Thị B', N'user', CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', '123456'), 2))
 ) AS src(username, full_name, role, password_hash)
 ON tgt.username = src.username
 WHEN MATCHED THEN
