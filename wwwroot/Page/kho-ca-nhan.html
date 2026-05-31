@@ -57,6 +57,11 @@
             <div id="app" class="kho-app">
                 <aside class="sidebar">
                     <h3 class="kho-search-wrap">Lịch sử mượn gần đây</h3>
+                    <label for="borrow-actor-select" style="display:block; margin-bottom:6px; color:#475569; font-size:0.9rem;">Người xử lý</label>
+                    <select id="borrow-actor-select" class="kho-select" style="margin-bottom: 12px; width: 100%;">
+                        <option value="">Đang tải người xử lý...</option>
+                    </select>
+                    <label for="borrow-user-select" style="display:block; margin-bottom:6px; color:#475569; font-size:0.9rem;">Người mượn</label>
                     <select id="borrow-user-select" class="kho-select" style="margin-bottom: 12px; width: 100%;">
                         <option value="">Đang tải người dùng...</option>
                     </select>
@@ -129,8 +134,12 @@
                 if (userResp.ok) {
                     const usersData = await userResp.json();
                     const userSelect = document.getElementById('borrow-user-select');
+                    const actorSelect = document.getElementById('borrow-actor-select');
                     if (userSelect && Array.isArray(usersData.users)) {
                         userSelect.innerHTML = '';
+                        if (actorSelect) {
+                            actorSelect.innerHTML = '';
+                        }
                         usersData.users.forEach((u, index) => {
                             const opt = document.createElement('option');
                             opt.value = u.value;
@@ -141,11 +150,28 @@
                                 opt.selected = true;
                             }
                             userSelect.appendChild(opt);
+
+                            if (actorSelect) {
+                                const aopt = document.createElement('option');
+                                aopt.value = u.value;
+                                aopt.textContent = u.label;
+                                if (sessionStorage.getItem('seb.borrowActorUser') === u.value) {
+                                    aopt.selected = true;
+                                } else if (index === 0 && !actorSelect.value) {
+                                    aopt.selected = true;
+                                }
+                                actorSelect.appendChild(aopt);
+                            }
                         });
 
                         const rememberedUser = sessionStorage.getItem('seb.lastBorrowUser');
                         if (rememberedUser) {
                             userSelect.value = rememberedUser;
+                        }
+
+                        const rememberedActor = sessionStorage.getItem('seb.borrowActorUser');
+                        if (actorSelect && rememberedActor) {
+                            actorSelect.value = rememberedActor;
                         }
 
                         userSelect.addEventListener('change', () => {
@@ -154,6 +180,12 @@
                                 window.renderBorrowHistorySidebar();
                             }
                         });
+
+                        if (actorSelect) {
+                            actorSelect.addEventListener('change', () => {
+                                sessionStorage.setItem('seb.borrowActorUser', actorSelect.value);
+                            });
+                        }
                     }
                 }
 

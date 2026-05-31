@@ -1,8 +1,105 @@
 // javascript/device_modal.js
 
+// Global UI helpers: confirm modal and toast notifications
+function initGlobalUI() {
+    if (document.getElementById('global-confirm-overlay')) return;
+
+    // Confirm overlay
+    const cOverlay = document.createElement('div');
+    cOverlay.id = 'global-confirm-overlay';
+    cOverlay.className = 'global-confirm-overlay';
+    cOverlay.style.display = 'none';
+    cOverlay.style.position = 'fixed';
+    cOverlay.style.left = '0';
+    cOverlay.style.top = '0';
+    cOverlay.style.right = '0';
+    cOverlay.style.bottom = '0';
+    cOverlay.style.background = 'rgba(2,6,23,0.6)';
+    cOverlay.style.zIndex = '99998';
+    cOverlay.style.alignItems = 'center';
+    cOverlay.style.justifyContent = 'center';
+    cOverlay.style.display = 'none';
+    cOverlay.innerHTML = `
+        <div class="global-confirm" id="global-confirm">
+            <div class="global-confirm-body" id="global-confirm-body">Xác nhận?</div>
+            <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
+                <button id="global-confirm-cancel" class="modal-btn-cancel">Hủy</button>
+                <button id="global-confirm-ok" class="modal-btn-confirm">Xác nhận</button>
+            </div>
+        </div>
+    `;
+    const inner = cOverlay.querySelector('#global-confirm');
+    if (inner) {
+        inner.style.background = '#fff';
+        inner.style.padding = '16px';
+        inner.style.borderRadius = '10px';
+        inner.style.minWidth = '320px';
+        inner.style.boxShadow = '0 8px 30px rgba(2,6,23,0.2)';
+    }
+    document.body.appendChild(cOverlay);
+
+    // Toast container
+    const toastContainer = document.createElement('div');
+    toastContainer.id = 'global-toast-container';
+    toastContainer.style.position = 'fixed';
+    toastContainer.style.right = '16px';
+    toastContainer.style.bottom = '16px';
+    toastContainer.style.zIndex = '100000';
+    document.body.appendChild(toastContainer);
+
+    // Attach basic handlers
+    document.getElementById('global-confirm-cancel').addEventListener('click', () => {
+        cOverlay.style.display = 'none';
+        if (cOverlay._resolve) cOverlay._resolve(false);
+    });
+    document.getElementById('global-confirm-ok').addEventListener('click', () => {
+        cOverlay.style.display = 'none';
+        if (cOverlay._resolve) cOverlay._resolve(true);
+    });
+}
+
+// Returns a Promise<boolean>
+window.showConfirm = function (message) {
+    return new Promise((resolve) => {
+        const cOverlay = document.getElementById('global-confirm-overlay');
+        const body = document.getElementById('global-confirm-body');
+        if (!cOverlay || !body) {
+            // fallback to native
+            resolve(window.confirm(message));
+            return;
+        }
+        body.textContent = message;
+        cOverlay.style.display = 'flex';
+        cOverlay._resolve = resolve;
+    });
+};
+
+window.showToast = function (message, type = 'info', timeoutMs = 3500) {
+    const container = document.getElementById('global-toast-container');
+    if (!container) return;
+    const el = document.createElement('div');
+    el.className = `global-toast global-toast-${type}`;
+    el.style.marginTop = '8px';
+    el.style.minWidth = '220px';
+    el.style.padding = '10px 12px';
+    el.style.borderRadius = '8px';
+    el.style.boxShadow = '0 6px 18px rgba(2,6,23,0.08)';
+    el.style.background = type === 'error' ? '#fee2e2' : (type === 'success' ? '#ecfdf5' : '#f8fafc');
+    el.style.color = type === 'error' ? '#b91c1c' : (type === 'success' ? '#065f46' : '#0f172a');
+    el.textContent = message;
+    container.appendChild(el);
+    setTimeout(() => {
+        el.style.opacity = '0';
+        setTimeout(() => container.removeChild(el), 300);
+    }, timeoutMs);
+};
+
 // Tạo và nhúng HTML Modal toàn cục vào Document Body
 function initDeviceModal() {
     if (document.getElementById('device-modal-overlay')) return;
+
+    // Ensure global UI helpers (confirm modal + toast) exist
+    initGlobalUI();
 
     const overlay = document.createElement('div');
     overlay.id = 'device-modal-overlay';
@@ -189,52 +286,55 @@ window.closeModal = function() {
     }
 };
 
-window.submitModalBorrow = function() {
+window.submitModalBorrow = async function() {
     const deviceId = document.getElementById('modal-btn-submit').getAttribute('data-device-id');
     const qty = document.getElementById('modal-qty').value;
     const date = document.getElementById('modal-date').value;
     const requesterUsername = document.getElementById('modal-requester')?.value || '';
     
     if (!requesterUsername) {
-        alert('Vui lòng chọn người mượn!');
+        window.showToast('Vui lòng chọn người mượn!', 'error');
         return;
     }
 
     if (qty < 1) {
-        alert('Vui lòng chọn số lượng hợp lệ!');
+        window.showToast('Vui lòng chọn số lượng hợp lệ!', 'error');
         return;
     }
 
-    fetch((window.API_BASE_URL || '') + '/api/borrow-requests', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-            requesterUsername,
-            deviceCode: deviceId,
-            quantity: Number(qty),
-            needDate: date,
-            note: ''
-        })
-    })
-        .then(async (resp) => {
-            if (!resp.ok) {
-                throw new Error(await resp.text());
-            }
-            return resp.json();
-        })
-        .then((data) => {
-            sessionStorage.setItem('seb.lastBorrowUser', requesterUsername);
-            alert(`Đã tạo phiếu mượn ${data.requestNo} cho thiết bị ${data.device.name}`);
-            closeModal();
-            if (typeof window.renderBorrowHistorySidebar === 'function') {
-                window.renderBorrowHistorySidebar();
-            }
-        })
-        .catch((error) => {
-            console.error(error);
-            alert('Tạo phiếu mượn thất bại. Vui lòng thử lại.');
+    const confirm = await window.showConfirm(`Xác nhận tạo phiếu mượn cho thiết bị ${deviceId} (SL: ${qty})?`);
+    if (!confirm) return;
+
+    try {
+        const resp = await fetch((window.API_BASE_URL || '') + '/api/borrow-requests', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                requesterUsername,
+                deviceCode: deviceId,
+                quantity: Number(qty),
+                needDate: date,
+                note: ''
+            })
         });
+
+        if (!resp.ok) {
+            const txt = await resp.text();
+            throw new Error(txt || 'server_error');
+        }
+
+        const data = await resp.json();
+        sessionStorage.setItem('seb.lastBorrowUser', requesterUsername);
+        window.showToast(`Đã tạo phiếu mượn ${data.requestNo}`, 'success');
+        closeModal();
+        if (typeof window.renderBorrowHistorySidebar === 'function') {
+            window.renderBorrowHistorySidebar();
+        }
+    } catch (err) {
+        console.error(err);
+        window.showToast('Tạo phiếu mượn thất bại. Vui lòng thử lại.', 'error');
+    }
 };

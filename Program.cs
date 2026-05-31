@@ -346,6 +346,158 @@ app.MapGet("/api/devices", async (
     }
 });
 
+// Personal devices (kho cá nhân) endpoints
+app.MapGet("/api/me/favorites", async (IConfiguration config, string? username, CancellationToken ct) =>
+{
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return Results.Problem(detail: "Missing MSSQL connection string.", statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    if (string.IsNullOrWhiteSpace(username))
+    {
+        return Results.BadRequest(new { error = "missing_username" });
+    }
+
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+
+        await using var command = new SqlCommand("dbo.sp_MyDevices_ListByUser", connection)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 15
+        };
+
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = username.Trim() });
+
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        var devices = new List<object>();
+        while (await reader.ReadAsync(ct))
+        {
+            devices.Add(new
+            {
+                id = reader.GetString(reader.GetOrdinal("id")),
+                name = reader.IsDBNull(reader.GetOrdinal("name")) ? null : reader.GetString(reader.GetOrdinal("name")),
+                category = reader.IsDBNull(reader.GetOrdinal("category")) ? null : reader.GetString(reader.GetOrdinal("category")),
+                subject = reader.IsDBNull(reader.GetOrdinal("subject")) ? null : reader.GetString(reader.GetOrdinal("subject")),
+                quantity = reader.IsDBNull(reader.GetOrdinal("quantity")) ? (int?)null : reader.GetInt32(reader.GetOrdinal("quantity")),
+                imageUrl = reader.IsDBNull(reader.GetOrdinal("imageUrl")) ? null : reader.GetString(reader.GetOrdinal("imageUrl")),
+                addedAt = reader.GetDateTime(reader.GetOrdinal("created_at"))
+            });
+        }
+
+        return Results.Ok(new { devices });
+    }
+    catch (SqlException ex) when (ex.Number == 2812)
+    {
+        return Results.Problem(detail: "stored_procedure_missing", statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (SqlException)
+    {
+        return Results.Problem(detail: "db_unavailable", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+app.MapPost("/api/me/favorites", async (IConfiguration config, FavoriteRequest body, CancellationToken ct) =>
+{
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return Results.Problem(detail: "Missing MSSQL connection string.", statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    if (string.IsNullOrWhiteSpace(body.Username) || string.IsNullOrWhiteSpace(body.DeviceCode))
+    {
+        return Results.BadRequest(new { error = "invalid_payload" });
+    }
+
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+
+        await using var command = new SqlCommand("dbo.sp_MyDevices_Add", connection)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 15
+        };
+
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = body.Username.Trim() });
+        command.Parameters.Add(new SqlParameter("@DeviceCode", SqlDbType.NVarChar, 50) { Value = body.DeviceCode.Trim() });
+
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return Results.Problem(detail: "favorite_add_failed", statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        var result = reader.GetInt32(0);
+        if (result == -1)
+        {
+            return Results.Ok(new { added = false, reason = "already_exists" });
+        }
+
+        return Results.Ok(new { added = true });
+    }
+    catch (SqlException ex) when (ex.Number == 2812)
+    {
+        return Results.Problem(detail: "stored_procedure_missing", statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (SqlException)
+    {
+        return Results.Problem(detail: "db_unavailable", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+app.MapDelete("/api/me/favorites/{deviceCode}", async (IConfiguration config, string deviceCode, string? username, CancellationToken ct) =>
+{
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return Results.Problem(detail: "Missing MSSQL connection string.", statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(deviceCode))
+    {
+        return Results.BadRequest(new { error = "invalid_payload" });
+    }
+
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+
+        await using var command = new SqlCommand("dbo.sp_MyDevices_Remove", connection)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 15
+        };
+
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = username.Trim() });
+        command.Parameters.Add(new SqlParameter("@DeviceCode", SqlDbType.NVarChar, 50) { Value = deviceCode.Trim() });
+
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return Results.Problem(detail: "favorite_remove_failed", statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        var deleted = reader.GetInt32(0);
+        return Results.Ok(new { deleted });
+    }
+    catch (SqlException ex) when (ex.Number == 2812)
+    {
+        return Results.Problem(detail: "stored_procedure_missing", statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (SqlException)
+    {
+        return Results.Problem(detail: "db_unavailable", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
 app.MapPost("/api/borrow-requests", async (IConfiguration config, BorrowRequestCreateRequest body, CancellationToken ct) =>
 {
     var connectionString = GetMssqlConnectionString(config);
@@ -575,3 +727,4 @@ app.Run();
 record LookupOption(string value, string label);
 record BorrowRequestCreateRequest(string RequesterUsername, string DeviceCode, int Quantity, DateTime NeedDate, string? Note);
 record BorrowRequestActionRequest(string Action, string? ActorUsername, string? Note);
+record FavoriteRequest(string Username, string DeviceCode);
