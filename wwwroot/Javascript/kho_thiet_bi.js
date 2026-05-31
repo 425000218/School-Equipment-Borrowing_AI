@@ -97,16 +97,32 @@ function handleRemove(id) {
         if (window.showToast) window.showToast('Vui lòng chọn người mượn trước khi thao tác.', 'error');
         return;
     }
-
     (async () => {
         try {
+            // First try POST fallback (some hosts/proxies block DELETE payloads)
+            const fallback = await fetch((window.API_BASE_URL || '') + '/api/me/favorites/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ Username: username, DeviceCode: id })
+            });
+
+            if (fallback.ok) {
+                const data = await fallback.json();
+                if (data.deleted && data.deleted > 0) {
+                    if (window.showToast) window.showToast('Đã xóa thiết bị khỏi kho cá nhân.', 'success');
+                    if (typeof window.renderPersonalDevices === 'function') window.renderPersonalDevices();
+                    return;
+                }
+            }
+
+            // Fallback to DELETE route if POST didn't remove
             const resp = await fetch((window.API_BASE_URL || '') + `/api/me/favorites/${encodeURIComponent(id)}?username=${encodeURIComponent(username)}`, {
                 method: 'DELETE',
                 headers: { 'Accept': 'application/json' }
             });
             if (!resp.ok) throw new Error(await resp.text());
-            const data = await resp.json();
-            if (data.deleted && data.deleted > 0) {
+            const data2 = await resp.json();
+            if (data2.deleted && data2.deleted > 0) {
                 if (window.showToast) window.showToast('Đã xóa thiết bị khỏi kho cá nhân.', 'success');
                 if (typeof window.renderPersonalDevices === 'function') window.renderPersonalDevices();
             } else {
