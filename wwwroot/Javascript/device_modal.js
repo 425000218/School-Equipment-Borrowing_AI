@@ -205,6 +205,8 @@ async function loadBorrowUsers() {
     const select = document.getElementById('modal-requester');
     if (!select) return;
 
+    const authUser = (window.SEBAuth && window.SEBAuth.getUser ? window.SEBAuth.getUser() : '').trim();
+
     const response = await fetch((window.API_BASE_URL || '') + '/api/lookups/users', {
         headers: { 'Accept': 'application/json' }
     });
@@ -229,14 +231,26 @@ async function loadBorrowUsers() {
         select.appendChild(option);
     });
 
-    const rememberedUser = sessionStorage.getItem('seb.lastBorrowUser');
+    const rememberedUser = authUser || sessionStorage.getItem('seb.lastBorrowUser');
     if (rememberedUser) {
         select.value = rememberedUser;
+    }
+
+    if (authUser) {
+        // In guarded mode, requester follows the logged-in account.
+        select.value = authUser;
+        select.disabled = true;
+    } else {
+        select.disabled = false;
     }
 }
 
 // Global expose function (Sẵn sàng phục vụ nhiều trang)
 window.openModal = function(device) {
+    if (window.SEBAuth && !window.SEBAuth.requireAuth({ message: 'Bạn cần đăng nhập để mượn thiết bị.' })) {
+        return;
+    }
+
     initDeviceModal(); // Lazy load UI only when needed
 
     document.getElementById('modal-title').textContent = device.name;
@@ -287,10 +301,16 @@ window.closeModal = function() {
 };
 
 window.submitModalBorrow = async function() {
+    if (window.SEBAuth && !window.SEBAuth.requireAuth({ message: 'Bạn cần đăng nhập để tạo phiếu mượn.' })) {
+        return;
+    }
+
     const deviceId = document.getElementById('modal-btn-submit').getAttribute('data-device-id');
     const qty = document.getElementById('modal-qty').value;
     const date = document.getElementById('modal-date').value;
-    const requesterUsername = document.getElementById('modal-requester')?.value || '';
+    const requesterUsername = (window.SEBAuth && window.SEBAuth.getUser ? window.SEBAuth.getUser() : '')
+        || document.getElementById('modal-requester')?.value
+        || '';
     
     if (!requesterUsername) {
         window.showToast('Vui lòng chọn người mượn!', 'error');

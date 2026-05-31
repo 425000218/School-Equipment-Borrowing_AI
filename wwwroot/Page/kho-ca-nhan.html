@@ -104,6 +104,7 @@
         </footer>
     </div>
 
+    <script src="../Javascript/auth.js"></script>
     <script src="../Javascript/Java.js"></script>
     <script src="../Javascript/device_modal.js"></script>
     <script src="../Javascript/devices_data.js"></script>
@@ -111,6 +112,11 @@
 
     <script>
         (async function(){
+            if (window.SEBAuth && !(await window.SEBAuth.restoreSessionFromServer())) {
+                window.SEBAuth.goToLogin();
+                return;
+            }
+
             try{
                 const resp = await fetch((window.API_BASE_URL || '') + '/api/lookups/device-filters');
                 if(!resp.ok) return;
@@ -133,6 +139,7 @@
                 const userResp = await fetch((window.API_BASE_URL || '') + '/api/lookups/users');
                 if (userResp.ok) {
                     const usersData = await userResp.json();
+                    const authUser = window.SEBAuth && window.SEBAuth.getUser ? window.SEBAuth.getUser() : '';
                     const userSelect = document.getElementById('borrow-user-select');
                     const actorSelect = document.getElementById('borrow-actor-select');
                     if (userSelect && Array.isArray(usersData.users)) {
@@ -149,9 +156,14 @@
                             userSelect.appendChild(opt);
                         });
 
-                        const rememberedUser = sessionStorage.getItem('seb.lastBorrowUser');
+                        const rememberedUser = authUser || sessionStorage.getItem('seb.lastBorrowUser');
                         if (rememberedUser) {
                             userSelect.value = rememberedUser;
+                        }
+
+                        if (authUser) {
+                            userSelect.value = authUser;
+                            userSelect.disabled = true;
                         }
 
                         userSelect.addEventListener('change', () => {
@@ -166,6 +178,8 @@
                 const approverResp = await fetch((window.API_BASE_URL || '') + '/api/lookups/approvers');
                 if (approverResp.ok) {
                     const approverData = await approverResp.json();
+                    const authUser = window.SEBAuth && window.SEBAuth.getUser ? window.SEBAuth.getUser() : '';
+                    const authRole = window.SEBAuth && window.SEBAuth.getRole ? window.SEBAuth.getRole() : 'user';
                     const actorSelect = document.getElementById('borrow-actor-select');
                     if (actorSelect && Array.isArray(approverData.users)) {
                         actorSelect.innerHTML = '';
@@ -181,9 +195,16 @@
                             actorSelect.appendChild(aopt);
                         });
 
-                        const rememberedActor = sessionStorage.getItem('seb.borrowActorUser');
+                        const rememberedActor = authUser || sessionStorage.getItem('seb.borrowActorUser');
                         if (rememberedActor) {
                             actorSelect.value = rememberedActor;
+                        }
+
+                        if (authRole === 'admin' || authRole === 'approver') {
+                            actorSelect.value = authUser || actorSelect.value;
+                            actorSelect.disabled = true;
+                        } else {
+                            actorSelect.disabled = true;
                         }
 
                         actorSelect.addEventListener('change', () => {

@@ -83,16 +83,17 @@ GO
 -- Users (người sử dụng cho dropdown)
 MERGE dbo.users AS tgt
 USING (VALUES
-    (N'gv-a', N'GV. Nguyễn Văn A', N'admin'),
-    (N'gv-b', N'GV. Trần Thị B', N'user')
-) AS src(username, full_name, role)
+    (N'gv-a', N'GV. Nguyễn Văn A', N'admin', CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', N'123456'), 2)),
+    (N'gv-b', N'GV. Trần Thị B', N'user', CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', N'123456'), 2))
+) AS src(username, full_name, role, password_hash)
 ON tgt.username = src.username
 WHEN MATCHED THEN
     UPDATE SET
         tgt.full_name = src.full_name,
         tgt.role = src.role,
+        tgt.password_hash = src.password_hash,
         tgt.status = N'active'
 WHEN NOT MATCHED THEN
-    INSERT (username, full_name, role, status)
-    VALUES (src.username, src.full_name, src.role, N'active');
+    INSERT (username, full_name, role, password_hash, status)
+    VALUES (src.username, src.full_name, src.role, src.password_hash, N'active');
 GO

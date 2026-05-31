@@ -1,5 +1,8 @@
 using Microsoft.Data.SqlClient;
+using System.Collections.Concurrent;
 using System.Data;
+using System.Security.Cryptography;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,6 +47,229 @@ static DateTime? ReadNullableDateTime(SqlDataReader reader, string columnName)
     return reader.IsDBNull(ordinal) ? null : DateTime.SpecifyKind(reader.GetDateTime(ordinal), DateTimeKind.Utc);
 }
 
+const string AuthCookieName = "seb_auth";
+const int LoginMaxFailedAttempts = 10;
+
+static string NormalizeLoginKey(string username)
+{
+    return (username ?? string.Empty).Trim().ToLowerInvariant();
+}
+
+static bool TryGetLoginLock(string loginKey, out int remainingSeconds)
+{
+    remainingSeconds = 0;
+    if (string.IsNullOrWhiteSpace(loginKey) || !LoginThrottleStore.StateByUser.TryGetValue(loginKey, out var state))
+    {
+        return false;
+    }
+
+    var shouldRemove = false;
+    lock (state)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        if (state.LockedUntilUtc.HasValue && state.LockedUntilUtc.Value > now)
+        {
+            remainingSeconds = (int)Math.Ceiling((state.LockedUntilUtc.Value - now).TotalSeconds);
+            return true;
+        }
+
+        if (state.LockedUntilUtc.HasValue && state.LockedUntilUtc.Value <= now)
+        {
+            state.LockedUntilUtc = null;
+            state.FailedCount = 0;
+            state.UpdatedAtUtc = now;
+        }
+
+        if (now - state.UpdatedAtUtc > LoginThrottleStore.StateTtl)
+        {
+            shouldRemove = true;
+        }
+    }
+
+    if (shouldRemove)
+    {
+        LoginThrottleStore.StateByUser.TryRemove(loginKey, out _);
+    }
+
+    return false;
+}
+
+static LoginFailureResult RegisterLoginFailure(string loginKey)
+{
+    var now = DateTimeOffset.UtcNow;
+    var state = LoginThrottleStore.StateByUser.GetOrAdd(loginKey, _ => new LoginThrottleState());
+
+    lock (state)
+    {
+        if (state.LockedUntilUtc.HasValue && state.LockedUntilUtc.Value > now)
+        {
+            var remaining = (int)Math.Ceiling((state.LockedUntilUtc.Value - now).TotalSeconds);
+            return new LoginFailureResult(true, remaining, 0);
+        }
+
+        if (state.LockedUntilUtc.HasValue && state.LockedUntilUtc.Value <= now)
+        {
+            state.LockedUntilUtc = null;
+            state.FailedCount = 0;
+        }
+
+        state.FailedCount += 1;
+        state.UpdatedAtUtc = now;
+
+        if (state.FailedCount >= LoginMaxFailedAttempts)
+        {
+            state.LockedUntilUtc = now.Add(LoginThrottleStore.LockDuration);
+            state.FailedCount = 0;
+            var remaining = (int)Math.Ceiling(LoginThrottleStore.LockDuration.TotalSeconds);
+            return new LoginFailureResult(true, remaining, 0);
+        }
+
+        return new LoginFailureResult(false, 0, state.FailedCount);
+    }
+}
+
+static void ClearLoginFailures(string loginKey)
+{
+    if (!string.IsNullOrWhiteSpace(loginKey))
+    {
+        LoginThrottleStore.StateByUser.TryRemove(loginKey, out _);
+    }
+}
+
+static string ComputeSha256Hex(string input)
+{
+    var bytes = Encoding.UTF8.GetBytes(input ?? string.Empty);
+    var hash = SHA256.HashData(bytes);
+    return Convert.ToHexString(hash).ToLowerInvariant();
+}
+
+static string Base64UrlEncode(byte[] bytes)
+{
+    return Convert.ToBase64String(bytes)
+        .TrimEnd('=')
+        .Replace('+', '-')
+        .Replace('/', '_');
+}
+
+static byte[] Base64UrlDecode(string encoded)
+{
+    var normalized = encoded.Replace('-', '+').Replace('_', '/');
+    var padding = 4 - (normalized.Length % 4);
+    if (padding is > 0 and < 4)
+    {
+        normalized = normalized + new string('=', padding);
+    }
+    return Convert.FromBase64String(normalized);
+}
+
+static string GetAuthSecret(IConfiguration config)
+{
+    return config["AUTH_SECRET"]
+        ?? config["Seb:AuthSecret"]
+        ?? "seb-dev-only-change-this-secret";
+}
+
+static string CreateAuthToken(string username, string role, DateTimeOffset expiresUtc, string secret)
+{
+    var payload = $"{username}|{role}|{expiresUtc.ToUnixTimeSeconds()}";
+    var payloadBytes = Encoding.UTF8.GetBytes(payload);
+    var payloadEncoded = Base64UrlEncode(payloadBytes);
+
+    var signatureBytes = HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(payloadEncoded));
+    var signatureEncoded = Base64UrlEncode(signatureBytes);
+    return $"{payloadEncoded}.{signatureEncoded}";
+}
+
+static AuthUser? ReadAuthUser(HttpContext httpContext, IConfiguration config)
+{
+    if (!httpContext.Request.Cookies.TryGetValue(AuthCookieName, out var token) || string.IsNullOrWhiteSpace(token))
+    {
+        return null;
+    }
+
+    var parts = token.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    if (parts.Length != 2)
+    {
+        return null;
+    }
+
+    var payloadEncoded = parts[0];
+    var signatureEncoded = parts[1];
+
+    var expectedSignature = Base64UrlEncode(HMACSHA256.HashData(
+        Encoding.UTF8.GetBytes(GetAuthSecret(config)),
+        Encoding.UTF8.GetBytes(payloadEncoded)));
+
+    if (!CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(signatureEncoded),
+            Encoding.UTF8.GetBytes(expectedSignature)))
+    {
+        return null;
+    }
+
+    string payload;
+    try
+    {
+        payload = Encoding.UTF8.GetString(Base64UrlDecode(payloadEncoded));
+    }
+    catch
+    {
+        return null;
+    }
+
+    var segments = payload.Split('|', StringSplitOptions.None);
+    if (segments.Length != 3)
+    {
+        return null;
+    }
+
+    var username = segments[0];
+    var role = segments[1];
+    if (!long.TryParse(segments[2], out var expUnix))
+    {
+        return null;
+    }
+
+    var expiresUtc = DateTimeOffset.FromUnixTimeSeconds(expUnix);
+    if (expiresUtc <= DateTimeOffset.UtcNow)
+    {
+        return null;
+    }
+
+    if (string.IsNullOrWhiteSpace(username))
+    {
+        return null;
+    }
+
+    return new AuthUser(username.Trim(), (role ?? "user").Trim().ToLowerInvariant(), expiresUtc);
+}
+
+static void SetAuthCookie(HttpContext httpContext, IConfiguration config, string username, string role, bool remember)
+{
+    var expiresUtc = DateTimeOffset.UtcNow.Add(remember ? TimeSpan.FromDays(7) : TimeSpan.FromHours(12));
+    var token = CreateAuthToken(username, role, expiresUtc, GetAuthSecret(config));
+
+    httpContext.Response.Cookies.Append(AuthCookieName, token, new CookieOptions
+    {
+        HttpOnly = true,
+        Secure = httpContext.Request.IsHttps,
+        SameSite = SameSiteMode.Lax,
+        Expires = expiresUtc,
+        Path = "/"
+    });
+}
+
+static void ClearAuthCookie(HttpContext httpContext)
+{
+    httpContext.Response.Cookies.Delete(AuthCookieName, new CookieOptions
+    {
+        Path = "/",
+        SameSite = SameSiteMode.Lax,
+        Secure = httpContext.Request.IsHttps
+    });
+}
+
 // Railway (và nhiều PaaS) cung cấp cổng chạy qua biến môi trường PORT.
 // Nếu ASPNETCORE_URLS chưa được set, ta bind Kestrel vào 0.0.0.0:PORT.
 var port = Environment.GetEnvironmentVariable("PORT");
@@ -65,6 +291,172 @@ app.MapGet("/api/health", () => Results.Ok(new
     status = "ok",
     utc = DateTimeOffset.UtcNow
 }));
+
+app.MapPost("/api/auth/login", async (HttpContext httpContext, IConfiguration config, LoginRequest body, CancellationToken ct) =>
+{
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return Results.Problem(
+            detail: "Missing MSSQL connection string. Set ConnectionStrings__Mssql (recommended) or MSSQL_CONNECTION_STRING.",
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    if (body is null || string.IsNullOrWhiteSpace(body.Username) || string.IsNullOrWhiteSpace(body.Password))
+    {
+        return Results.BadRequest(new { error = "invalid_payload" });
+    }
+
+    var loginKey = NormalizeLoginKey(body.Username);
+    if (string.IsNullOrWhiteSpace(loginKey))
+    {
+        return Results.BadRequest(new { error = "invalid_payload" });
+    }
+
+    if (TryGetLoginLock(loginKey, out var remainingBeforeLogin))
+    {
+        return Results.Json(new
+        {
+            error = "account_locked",
+            retryAfterSeconds = remainingBeforeLogin,
+            lockDurationMinutes = (int)LoginThrottleStore.LockDuration.TotalMinutes
+        }, statusCode: StatusCodes.Status423Locked);
+    }
+
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+
+        await using var command = new SqlCommand(@"
+SELECT TOP (1)
+    u.username,
+    u.role,
+    u.full_name,
+    u.password_hash,
+    u.status
+FROM dbo.users AS u
+WHERE u.username = @Username;", connection)
+        {
+            CommandType = CommandType.Text,
+            CommandTimeout = 15
+        };
+
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = body.Username.Trim() });
+
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            var failure = RegisterLoginFailure(loginKey);
+            if (failure.IsLocked)
+            {
+                return Results.Json(new
+                {
+                    error = "account_locked",
+                    retryAfterSeconds = failure.RetryAfterSeconds,
+                    lockDurationMinutes = (int)LoginThrottleStore.LockDuration.TotalMinutes
+                }, statusCode: StatusCodes.Status423Locked);
+            }
+
+            return Results.Json(new
+            {
+                error = "invalid_credentials",
+                attemptsRemaining = Math.Max(0, LoginMaxFailedAttempts - failure.CurrentFailedCount)
+            }, statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        var status = ReadNullableString(reader, "status");
+        if (!string.Equals(status, "active", StringComparison.OrdinalIgnoreCase))
+        {
+            var failure = RegisterLoginFailure(loginKey);
+            if (failure.IsLocked)
+            {
+                return Results.Json(new
+                {
+                    error = "account_locked",
+                    retryAfterSeconds = failure.RetryAfterSeconds,
+                    lockDurationMinutes = (int)LoginThrottleStore.LockDuration.TotalMinutes
+                }, statusCode: StatusCodes.Status423Locked);
+            }
+
+            return Results.Json(new
+            {
+                error = "invalid_credentials",
+                attemptsRemaining = Math.Max(0, LoginMaxFailedAttempts - failure.CurrentFailedCount)
+            }, statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        var passwordHash = ReadNullableString(reader, "password_hash");
+        var incomingHash = ComputeSha256Hex(body.Password.Trim());
+        if (string.IsNullOrWhiteSpace(passwordHash) || !string.Equals(passwordHash.Trim(), incomingHash, StringComparison.OrdinalIgnoreCase))
+        {
+            var failure = RegisterLoginFailure(loginKey);
+            if (failure.IsLocked)
+            {
+                return Results.Json(new
+                {
+                    error = "account_locked",
+                    retryAfterSeconds = failure.RetryAfterSeconds,
+                    lockDurationMinutes = (int)LoginThrottleStore.LockDuration.TotalMinutes
+                }, statusCode: StatusCodes.Status423Locked);
+            }
+
+            return Results.Json(new
+            {
+                error = "invalid_credentials",
+                attemptsRemaining = Math.Max(0, LoginMaxFailedAttempts - failure.CurrentFailedCount)
+            }, statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        var username = reader.GetString(reader.GetOrdinal("username")).Trim();
+        var role = (ReadNullableString(reader, "role") ?? "user").Trim().ToLowerInvariant();
+        var fullName = ReadNullableString(reader, "full_name");
+
+        ClearLoginFailures(loginKey);
+        SetAuthCookie(httpContext, config, username, role, body.Remember);
+
+        return Results.Ok(new
+        {
+            user = new
+            {
+                username,
+                role,
+                fullName
+            }
+        });
+    }
+    catch (SqlException)
+    {
+        return Results.Problem(
+            detail: "db_unavailable",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+app.MapGet("/api/auth/session", (HttpContext httpContext, IConfiguration config) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    return Results.Ok(new
+    {
+        user = new
+        {
+            username = authUser.Username,
+            role = authUser.Role,
+            expiresAt = authUser.ExpiresAtUtc
+        }
+    });
+});
+
+app.MapPost("/api/auth/logout", (HttpContext httpContext) =>
+{
+    ClearAuthCookie(httpContext);
+    return Results.Ok(new { ok = true });
+});
 
 // DB connectivity check (Bước 3): chỉ gọi stored procedure
 app.MapGet("/api/db/ping", async (IConfiguration config, CancellationToken ct) =>
@@ -387,7 +779,7 @@ app.MapGet("/api/devices", async (
 });
 
 // Personal devices (kho cá nhân) endpoints
-app.MapGet("/api/me/favorites", async (IConfiguration config, string? username, CancellationToken ct) =>
+app.MapGet("/api/me/favorites", async (HttpContext httpContext, IConfiguration config, CancellationToken ct) =>
 {
     var connectionString = GetMssqlConnectionString(config);
     if (string.IsNullOrWhiteSpace(connectionString))
@@ -395,10 +787,13 @@ app.MapGet("/api/me/favorites", async (IConfiguration config, string? username, 
         return Results.Problem(detail: "Missing MSSQL connection string.", statusCode: StatusCodes.Status500InternalServerError);
     }
 
-    if (string.IsNullOrWhiteSpace(username))
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null)
     {
-        return Results.BadRequest(new { error = "missing_username" });
+        return Results.Unauthorized();
     }
+
+    var username = authUser.Username;
 
     try
     {
@@ -441,7 +836,7 @@ app.MapGet("/api/me/favorites", async (IConfiguration config, string? username, 
     }
 });
 
-app.MapPost("/api/me/favorites", async (IConfiguration config, FavoriteRequest body, CancellationToken ct) =>
+app.MapPost("/api/me/favorites", async (HttpContext httpContext, IConfiguration config, FavoriteRequest body, CancellationToken ct) =>
 {
     var connectionString = GetMssqlConnectionString(config);
     if (string.IsNullOrWhiteSpace(connectionString))
@@ -449,7 +844,13 @@ app.MapPost("/api/me/favorites", async (IConfiguration config, FavoriteRequest b
         return Results.Problem(detail: "Missing MSSQL connection string.", statusCode: StatusCodes.Status500InternalServerError);
     }
 
-    if (string.IsNullOrWhiteSpace(body.Username) || string.IsNullOrWhiteSpace(body.DeviceCode))
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (string.IsNullOrWhiteSpace(body.DeviceCode))
     {
         return Results.BadRequest(new { error = "invalid_payload" });
     }
@@ -465,7 +866,7 @@ app.MapPost("/api/me/favorites", async (IConfiguration config, FavoriteRequest b
             CommandTimeout = 15
         };
 
-        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = body.Username.Trim() });
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = authUser.Username });
         command.Parameters.Add(new SqlParameter("@DeviceCode", SqlDbType.NVarChar, 50) { Value = body.DeviceCode.Trim() });
 
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -493,7 +894,7 @@ app.MapPost("/api/me/favorites", async (IConfiguration config, FavoriteRequest b
 });
 
 // Fallback delete endpoint (POST) to support environments that restrict DELETE payloads
-app.MapPost("/api/me/favorites/remove", async (IConfiguration config, FavoriteRequest body, CancellationToken ct) =>
+app.MapPost("/api/me/favorites/remove", async (HttpContext httpContext, IConfiguration config, FavoriteRequest body, CancellationToken ct) =>
 {
     var connectionString = GetMssqlConnectionString(config);
     if (string.IsNullOrWhiteSpace(connectionString))
@@ -501,7 +902,13 @@ app.MapPost("/api/me/favorites/remove", async (IConfiguration config, FavoriteRe
         return Results.Problem(detail: "Missing MSSQL connection string.", statusCode: StatusCodes.Status500InternalServerError);
     }
 
-    if (body is null || string.IsNullOrWhiteSpace(body.Username) || string.IsNullOrWhiteSpace(body.DeviceCode))
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (body is null || string.IsNullOrWhiteSpace(body.DeviceCode))
     {
         return Results.BadRequest(new { error = "invalid_payload" });
     }
@@ -517,7 +924,7 @@ app.MapPost("/api/me/favorites/remove", async (IConfiguration config, FavoriteRe
             CommandTimeout = 15
         };
 
-        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = body.Username.Trim() });
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = authUser.Username });
         command.Parameters.Add(new SqlParameter("@DeviceCode", SqlDbType.NVarChar, 50) { Value = body.DeviceCode.Trim() });
 
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -547,49 +954,13 @@ app.MapDelete("/api/me/favorites/{deviceCode}", async (HttpContext httpContext, 
         return Results.Problem(detail: "Missing MSSQL connection string.", statusCode: StatusCodes.Status500InternalServerError);
     }
 
-    // Robustly obtain username: prefer querystring, fall back to headers (username or X-Username)
-    var username = httpContext.Request.Query["username"].ToString();
-    if (string.IsNullOrWhiteSpace(username))
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null)
     {
-        if (httpContext.Request.Headers.TryGetValue("username", out var hv) && !string.IsNullOrWhiteSpace(hv.ToString()))
-        {
-            username = hv.ToString();
-        }
-        else if (httpContext.Request.Headers.TryGetValue("X-Username", out hv) && !string.IsNullOrWhiteSpace(hv.ToString()))
-        {
-            username = hv.ToString();
-        }
+        return Results.Unauthorized();
     }
 
-    // If still empty, try to read JSON body (some clients send username in body on DELETE)
-    if (string.IsNullOrWhiteSpace(username) && httpContext.Request.ContentLength > 0)
-    {
-        try
-        {
-            httpContext.Request.EnableBuffering();
-            using var sr = new StreamReader(httpContext.Request.Body, leaveOpen: true);
-            var bodyText = await sr.ReadToEndAsync();
-            httpContext.Request.Body.Position = 0;
-            if (!string.IsNullOrWhiteSpace(bodyText))
-            {
-                using var doc = System.Text.Json.JsonDocument.Parse(bodyText);
-                if (doc.RootElement.TryGetProperty("username", out var p) && p.ValueKind == System.Text.Json.JsonValueKind.String)
-                {
-                    username = p.GetString();
-                }
-                else if (doc.RootElement.TryGetProperty("Username", out p) && p.ValueKind == System.Text.Json.JsonValueKind.String)
-                {
-                    username = p.GetString();
-                }
-            }
-        }
-        catch
-        {
-            // ignore parse errors and continue
-        }
-    }
-
-    if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(deviceCode))
+    if (string.IsNullOrWhiteSpace(deviceCode))
     {
         return Results.BadRequest(new { error = "invalid_payload" });
     }
@@ -605,7 +976,7 @@ app.MapDelete("/api/me/favorites/{deviceCode}", async (HttpContext httpContext, 
             CommandTimeout = 15
         };
 
-        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = username.Trim() });
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = authUser.Username });
         command.Parameters.Add(new SqlParameter("@DeviceCode", SqlDbType.NVarChar, 50) { Value = deviceCode.Trim() });
 
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -627,7 +998,7 @@ app.MapDelete("/api/me/favorites/{deviceCode}", async (HttpContext httpContext, 
     }
 });
 
-app.MapPost("/api/borrow-requests", async (IConfiguration config, BorrowRequestCreateRequest body, CancellationToken ct) =>
+app.MapPost("/api/borrow-requests", async (HttpContext httpContext, IConfiguration config, BorrowRequestCreateRequest body, CancellationToken ct) =>
 {
     var connectionString = GetMssqlConnectionString(config);
     if (string.IsNullOrWhiteSpace(connectionString))
@@ -637,7 +1008,13 @@ app.MapPost("/api/borrow-requests", async (IConfiguration config, BorrowRequestC
             statusCode: StatusCodes.Status500InternalServerError);
     }
 
-    if (string.IsNullOrWhiteSpace(body.RequesterUsername) || string.IsNullOrWhiteSpace(body.DeviceCode) || body.Quantity <= 0)
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (string.IsNullOrWhiteSpace(body.DeviceCode) || body.Quantity <= 0)
     {
         return Results.BadRequest(new { error = "invalid_payload" });
     }
@@ -653,7 +1030,7 @@ app.MapPost("/api/borrow-requests", async (IConfiguration config, BorrowRequestC
             CommandTimeout = 20
         };
 
-        command.Parameters.Add(new SqlParameter("@RequesterUsername", SqlDbType.NVarChar, 50) { Value = body.RequesterUsername.Trim() });
+        command.Parameters.Add(new SqlParameter("@RequesterUsername", SqlDbType.NVarChar, 50) { Value = authUser.Username });
         command.Parameters.Add(new SqlParameter("@DeviceCode", SqlDbType.NVarChar, 50) { Value = body.DeviceCode.Trim() });
         command.Parameters.Add(new SqlParameter("@Quantity", SqlDbType.Int) { Value = body.Quantity });
         command.Parameters.Add(new SqlParameter("@NeedDate", SqlDbType.Date) { Value = body.NeedDate.Date });
@@ -700,8 +1077,8 @@ app.MapPost("/api/borrow-requests", async (IConfiguration config, BorrowRequestC
 });
 
 app.MapGet("/api/borrow-requests", async (
+    HttpContext httpContext,
     IConfiguration config,
-    string? requesterUsername,
     string? status,
     CancellationToken ct) =>
 {
@@ -713,9 +1090,10 @@ app.MapGet("/api/borrow-requests", async (
             statusCode: StatusCodes.Status500InternalServerError);
     }
 
-    if (string.IsNullOrWhiteSpace(requesterUsername))
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null)
     {
-        return Results.BadRequest(new { error = "missing_requester_username" });
+        return Results.Unauthorized();
     }
 
     try
@@ -729,7 +1107,7 @@ app.MapGet("/api/borrow-requests", async (
             CommandTimeout = 20
         };
 
-        command.Parameters.Add(new SqlParameter("@RequesterUsername", SqlDbType.NVarChar, 50) { Value = requesterUsername.Trim() });
+        command.Parameters.Add(new SqlParameter("@RequesterUsername", SqlDbType.NVarChar, 50) { Value = authUser.Username });
         command.Parameters.Add(new SqlParameter("@Status", SqlDbType.NVarChar, 20) { Value = string.IsNullOrWhiteSpace(status) ? DBNull.Value : status.Trim() });
 
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -773,6 +1151,7 @@ app.MapGet("/api/borrow-requests", async (
 });
 
 app.MapPost("/api/borrow-requests/{requestNo}/actions", async (
+    HttpContext httpContext,
     IConfiguration config,
     string requestNo,
     BorrowRequestActionRequest body,
@@ -784,6 +1163,17 @@ app.MapPost("/api/borrow-requests/{requestNo}/actions", async (
         return Results.Problem(
             detail: "Missing MSSQL connection string. Set ConnectionStrings__Mssql (recommended) or MSSQL_CONNECTION_STRING.",
             statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (authUser.Role != "admin" && authUser.Role != "approver")
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
     }
 
     if (string.IsNullOrWhiteSpace(requestNo) || string.IsNullOrWhiteSpace(body.Action))
@@ -804,7 +1194,7 @@ app.MapPost("/api/borrow-requests/{requestNo}/actions", async (
 
         command.Parameters.Add(new SqlParameter("@RequestNo", SqlDbType.NVarChar, 30) { Value = requestNo.Trim() });
         command.Parameters.Add(new SqlParameter("@Action", SqlDbType.NVarChar, 20) { Value = body.Action.Trim() });
-        command.Parameters.Add(new SqlParameter("@ActorUsername", SqlDbType.NVarChar, 50) { Value = string.IsNullOrWhiteSpace(body.ActorUsername) ? DBNull.Value : body.ActorUsername.Trim() });
+        command.Parameters.Add(new SqlParameter("@ActorUsername", SqlDbType.NVarChar, 50) { Value = authUser.Username });
         command.Parameters.Add(new SqlParameter("@Note", SqlDbType.NVarChar, -1) { Value = string.IsNullOrWhiteSpace(body.Note) ? DBNull.Value : body.Note.Trim() });
 
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -854,6 +1244,24 @@ app.MapPost("/api/borrow-requests/{requestNo}/actions", async (
 app.Run();
 
 record LookupOption(string value, string label);
+record LoginRequest(string Username, string Password, bool Remember);
+record AuthUser(string Username, string Role, DateTimeOffset ExpiresAtUtc);
+record LoginFailureResult(bool IsLocked, int RetryAfterSeconds, int CurrentFailedCount);
+
+sealed class LoginThrottleState
+{
+    public int FailedCount { get; set; }
+    public DateTimeOffset? LockedUntilUtc { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+}
+
+static class LoginThrottleStore
+{
+    public static readonly TimeSpan LockDuration = TimeSpan.FromMinutes(20);
+    public static readonly TimeSpan StateTtl = TimeSpan.FromHours(24);
+    public static readonly ConcurrentDictionary<string, LoginThrottleState> StateByUser = new(StringComparer.OrdinalIgnoreCase);
+}
+
 record BorrowRequestCreateRequest(string RequesterUsername, string DeviceCode, int Quantity, DateTime NeedDate, string? Note);
 record BorrowRequestActionRequest(string Action, string? ActorUsername, string? Note);
 record FavoriteRequest(string Username, string DeviceCode);

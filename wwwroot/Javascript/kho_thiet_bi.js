@@ -47,6 +47,10 @@ function renderCard(device) {
 }
 
 function handleBorrow(id) {
+    if (window.SEBAuth && !window.SEBAuth.requireAuth({ message: 'Bạn cần đăng nhập để tạo phiếu mượn.' })) {
+        return;
+    }
+
     if (typeof window.openDeviceModalById === 'function') {
         window.openDeviceModalById(id);
         return;
@@ -62,10 +66,13 @@ function handleAdd(id) {
     const device = allDevices.find(d => d.id === id);
     if (!device) return;
 
-    // Try to add via API (username from sessionStorage)
-    const username = sessionStorage.getItem('seb.lastBorrowUser') || '';
+    if (window.SEBAuth && !window.SEBAuth.requireAuth({ message: 'Bạn cần đăng nhập để thêm vào kho cá nhân.' })) {
+        return;
+    }
+
+    const username = (window.SEBAuth && window.SEBAuth.getUser ? window.SEBAuth.getUser() : '') || sessionStorage.getItem('seb.lastBorrowUser') || '';
     if (!username) {
-        if (window.showToast) window.showToast('Vui lòng chọn người mượn trước khi thêm kho cá nhân.', 'error');
+        if (window.showToast) window.showToast('Không xác định được tài khoản đăng nhập.', 'error');
         return;
     }
 
@@ -92,9 +99,13 @@ function handleAdd(id) {
 }
 
 function handleRemove(id) {
-    const username = sessionStorage.getItem('seb.lastBorrowUser') || '';
+    if (window.SEBAuth && !window.SEBAuth.requireAuth({ message: 'Bạn cần đăng nhập để xóa khỏi kho cá nhân.' })) {
+        return;
+    }
+
+    const username = (window.SEBAuth && window.SEBAuth.getUser ? window.SEBAuth.getUser() : '') || sessionStorage.getItem('seb.lastBorrowUser') || '';
     if (!username) {
-        if (window.showToast) window.showToast('Vui lòng chọn người mượn trước khi thao tác.', 'error');
+        if (window.showToast) window.showToast('Không xác định được tài khoản đăng nhập.', 'error');
         return;
     }
     (async () => {
@@ -316,6 +327,10 @@ function getBorrowStatusLabel(status) {
 }
 
 function getBorrowActionButtons(status, requestNo) {
+    const role = (window.SEBAuth && window.SEBAuth.getRole ? window.SEBAuth.getRole() : 'user') || 'user';
+    const canHandle = role === 'admin' || role === 'approver';
+    if (!canHandle) return '';
+
     if (!requestNo) return '';
 
     const buttonStyle = 'padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.75rem; background: #fff; color: #334155; cursor: pointer;';
@@ -334,8 +349,17 @@ function getBorrowActionButtons(status, requestNo) {
 }
 
 async function applyBorrowRequestAction(requestNo, action) {
+    if (window.SEBAuth && !window.SEBAuth.requireAuth({ message: 'Bạn cần đăng nhập để thực hiện thao tác duyệt.' })) {
+        throw new Error('not_logged_in');
+    }
+
+    const role = (window.SEBAuth && window.SEBAuth.getRole ? window.SEBAuth.getRole() : 'user') || 'user';
+    if (role !== 'admin' && role !== 'approver') {
+        throw new Error('forbidden_role');
+    }
+
     const actorSelect = document.getElementById('borrow-actor-select');
-    const actorUsername = actorSelect ? actorSelect.value : '';
+    const actorUsername = (window.SEBAuth && window.SEBAuth.getUser ? window.SEBAuth.getUser() : '') || (actorSelect ? actorSelect.value : '');
 
     const response = await fetch((window.API_BASE_URL || '') + `/api/borrow-requests/${encodeURIComponent(requestNo)}/actions`, {
         method: 'POST',
@@ -412,7 +436,10 @@ window.renderBorrowHistorySidebar = function () {
     if (!listEl) return;
 
     const userSelect = document.getElementById('borrow-user-select');
-    const requesterUsername = (userSelect && userSelect.value) || sessionStorage.getItem('seb.lastBorrowUser') || '';
+    const requesterUsername = (window.SEBAuth && window.SEBAuth.getUser ? window.SEBAuth.getUser() : '')
+        || (userSelect && userSelect.value)
+        || sessionStorage.getItem('seb.lastBorrowUser')
+        || '';
 
     if (!requesterUsername) {
         listEl.innerHTML = '<li style="color: #64748b; font-size: 0.9rem;">Chọn người mượn để xem lịch sử.</li>';
@@ -472,13 +499,20 @@ window.renderBorrowHistorySidebar = function () {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+    if (window.SEBAuth && typeof window.SEBAuth.restoreSessionFromServer === 'function') {
+        await window.SEBAuth.restoreSessionFromServer();
+    }
+
+    const isPersonalPage = window.location.pathname.includes('kho-ca-nhan.html');
+    if (isPersonalPage && window.SEBAuth && !window.SEBAuth.requireAuth({ message: 'Bạn cần đăng nhập để xem kho cá nhân.' })) {
+        return;
+    }
+
     const grid = document.getElementById('equipment-grid');
     if (grid) {
         renderSkeleton();
 
         try {
-            const isPersonalPage = window.location.pathname.includes('kho-ca-nhan.html');
-
             // Load lookups (categories + subjects) from API
             try {
                 const resp = await fetch((window.API_BASE_URL || '') + '/api/lookups/device-filters');
@@ -501,7 +535,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (isPersonalPage) {
                 // Load personal devices from API
-                const username = sessionStorage.getItem('seb.lastBorrowUser') || '';
+                const username = (window.SEBAuth && window.SEBAuth.getUser ? window.SEBAuth.getUser() : '') || sessionStorage.getItem('seb.lastBorrowUser') || '';
                 if (!username) {
                     allDevices = [];
                 } else {
