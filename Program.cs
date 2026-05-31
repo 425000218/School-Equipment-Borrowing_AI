@@ -75,6 +75,14 @@ app.MapGet("/debug/echo", (HttpContext ctx) =>
     return Results.Ok(new { query = qs, headerUsername = h1.ToString(), headerXUsername = h2.ToString() });
 });
 
+app.MapDelete("/debug/echo", (HttpContext ctx) =>
+{
+    var qs = ctx.Request.QueryString.Value;
+    ctx.Request.Headers.TryGetValue("username", out var h1);
+    ctx.Request.Headers.TryGetValue("X-Username", out var h2);
+    return Results.Ok(new { query = qs, headerUsername = h1.ToString(), headerXUsername = h2.ToString() });
+});
+
 // DB connectivity check (Bước 3): chỉ gọi stored procedure
 app.MapGet("/api/db/ping", async (IConfiguration config, CancellationToken ct) =>
 {
