@@ -259,9 +259,74 @@ document.addEventListener('DOMContentLoaded', async function () {
                     btn.title = `Mục đích: ${b.purpose || 'Không có'}`;
                 }
             });
+
+            // 3. Hiển thị danh sách bên dưới
+            const listContainer = document.getElementById('booking-list-content');
+            if (listContainer) {
+                if (bookings.length === 0) {
+                    listContainer.innerHTML = '<div style="color: #64748b; font-size: 0.95rem; text-align: center; padding: 10px;">Chưa có dữ liệu phòng được đăng ký trong tuần này</div>';
+                } else {
+                    listContainer.innerHTML = '';
+                    const currentUser = window.SEBAuth && typeof window.SEBAuth.getUser === 'function' ? window.SEBAuth.getUser() : null;
+                    
+                    bookings.forEach(b => {
+                        const dateStr = formatDM(new Date(b.bookingDate));
+                        const isMine = currentUser && (b.requesterUsername === currentUser);
+                        
+                        const itemDiv = document.createElement('div');
+                        itemDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;';
+                        
+                        const infoDiv = document.createElement('div');
+                        infoDiv.innerHTML = `
+                            <div style="font-weight: 600; color: #0f172a; margin-bottom: 4px;">Phòng ${b.roomCode} - ${b.slot.replace('_', ' ')} (Ngày ${dateStr})</div>
+                            <div style="font-size: 0.85rem; color: #475569;">Giáo viên: ${b.requesterFullName || b.requesterUsername} | Mục đích: ${b.purpose || 'Không có'}</div>
+                        `;
+                        
+                        itemDiv.appendChild(infoDiv);
+                        
+                        if (isMine) {
+                            const actionDiv = document.createElement('div');
+                            const cancelBtn = document.createElement('button');
+                            cancelBtn.innerText = 'Hủy';
+                            cancelBtn.style.cssText = 'background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 0.85rem;';
+                            cancelBtn.onclick = () => cancelBooking(b.bookingNo);
+                            actionDiv.appendChild(cancelBtn);
+                            itemDiv.appendChild(actionDiv);
+                        }
+                        
+                        listContainer.appendChild(itemDiv);
+                    });
+                }
+            }
         } catch (e) {
             console.error(e);
             alert('Lỗi khi tải lịch đặt phòng từ hệ thống.');
+        }
+    }
+
+    async function cancelBooking(bookingNo) {
+        if (!confirm('Bạn có chắc chắn muốn hủy yêu cầu đặt phòng này?')) return;
+        
+        try {
+            const response = await fetch(`${API_BASE}/api/room-bookings/${bookingNo}/actions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({ action: 'cancel', note: 'Người dùng tự hủy' })
+            });
+            
+            if (response.ok) {
+                alert('Đã hủy đặt phòng thành công!');
+                fetchBookings();
+            } else {
+                const errData = await response.json();
+                alert(`Lỗi: ${errData.error || 'Không thể hủy'}`);
+            }
+        } catch (e) {
+            alert('Lỗi kết nối khi hủy đặt phòng.');
         }
     }
 

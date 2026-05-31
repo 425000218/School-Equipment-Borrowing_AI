@@ -2,7 +2,7 @@
     const AUTH_USER_KEY = 'seb.authUser';
     const AUTH_ROLE_KEY = 'seb.authRole';
     const AUTH_FULLNAME_KEY = 'seb.authFullName';
-    const PROFILE_PATH = '/Page/profile.html';
+    const PROFILE_PATH = '/Page/kho-ca-nhan.html';
     const LOGIN_PATH = '/Page/dang-nhap.html';
 
     function dispatchAuthChanged() {
