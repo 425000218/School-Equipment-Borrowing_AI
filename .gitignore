@@ -18,6 +18,8 @@ appsettings.Development.json
 *.log
 *.tmp
 *.bak
+cookies.txt
+login.json
 
 # --- Secrets / env ---
 .env
