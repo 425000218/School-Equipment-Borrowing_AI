@@ -1,0 +1,235 @@
+/* =========================================
+   UI/UX IMPROVEMENTS
+   ========================================= */
+
+/* 1. DARK MODE VARIABLES */
+[data-theme="dark"] {
+    --bg-page: #121212;
+    --text-dark: #e0e0e0;
+    --equipment-container-bg: #1e1e1e;
+    --stat-bg: #2d2d2d;
+    --card-border: #333333;
+    --time-bg: #2a2a2a;
+    --container-border: #3a3a3a;
+    --section-header-bg: #1f1f1f;
+    --section-header-text: #64b5f6;
+    background-color: var(--bg-page);
+    color: var(--text-dark);
+}
+
+[data-theme="dark"] .system-container,
+[data-theme="dark"] .search-container,
+[data-theme="dark"] .stats-row,
+[data-theme="dark"] .section-wrapper,
+[data-theme="dark"] .equipment-card,
+[data-theme="dark"] .trend-card,
+[data-theme="dark"] .highlight-card,
+[data-theme="dark"] .partner-strip,
+[data-theme="dark"] .footer,
+[data-theme="dark"] .nav-bar,
+[data-theme="dark"] .search-pill,
+[data-theme="dark"] .stat-card,
+[data-theme="dark"] .equipment-img-box {
+    background-color: #1e1e1e;
+    color: var(--text-dark);
+    border-color: var(--card-border);
+}
+
+[data-theme="dark"] .trend-roadmap,
+[data-theme="dark"] .highlight-card {
+    background: #1e1e1e;
+}
+
+[data-theme="dark"] input {
+    color: var(--text-dark);
+}
+
+/* Dark mode toggle button */
+.theme-toggle-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 20px;
+    padding: 5px;
+}
+
+/* 2. SKELETON LOADING */
+.skeleton {
+    animation: skeleton-loading 1.2s linear infinite alternate;
+    border-radius: 4px;
+}
+
+.skeleton-text {
+    height: 12px;
+    margin-bottom: 8px;
+    width: 100%;
+}
+
+.skeleton-text:last-child {
+    width: 80%;
+}
+
+.skeleton-img {
+    width: 100%;
+    height: 120px;
+}
+
+@keyframes skeleton-loading {
+    0% { background-color: hsl(200, 20%, 80%); }
+    100% { background-color: hsl(200, 20%, 95%); }
+}
+[data-theme="dark"] @keyframes skeleton-loading {
+    0% { background-color: hsl(200, 20%, 20%); }
+    100% { background-color: hsl(200, 20%, 30%); }
+}
+
+/* Empty State */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+    color: #6c757d;
+}
+.empty-state i {
+    font-size: 48px;
+    margin-bottom: 15px;
+    color: #dee2e6;
+}
+[data-theme="dark"] .empty-state i {
+    color: #495057;
+}
+
+/* 3. TOAST NOTIFICATIONS */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.toast {
+    background: #fff;
+    color: #333;
+    padding: 15px 25px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 500;
+    transform: translateX(120%);
+    transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.toast.show {
+    transform: translateX(0);
+}
+
+.toast.success { border-left: 4px solid #10b981; }
+.toast.error { border-left: 4px solid #ef4444; }
+.toast.warning { border-left: 4px solid #f59e0b; }
+
+[data-theme="dark"] .toast {
+    background: #2d2d2d;
+    color: #e0e0e0;
+}
+
+/* 4. CUSTOM CONFIRM MODAL */
+.custom-modal-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s;
+}
+
+.custom-modal-backdrop.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.custom-modal {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    transform: scale(0.9);
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    text-align: center;
+}
+
+.custom-modal-backdrop.show .custom-modal {
+    transform: scale(1);
+}
+
+[data-theme="dark"] .custom-modal {
+    background: #1e1e1e;
+    color: #e0e0e0;
+}
+
+.custom-modal-title { font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+.custom-modal-message { font-size: 14px; margin-bottom: 20px; color: #666; }
+[data-theme="dark"] .custom-modal-message { color: #aaa; }
+
+.custom-modal-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+.btn-modal {
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.2s;
+}
+.btn-modal:hover { opacity: 0.8; }
+.btn-modal-cancel { background: #e5e7eb; color: #374151; }
+.btn-modal-confirm { background: #10b981; color: white; }
+
+[data-theme="dark"] .btn-modal-cancel { background: #374151; color: #e5e7eb; }
+
+/* 5. FORM VALIDATION UI */
+.input-error {
+    border-color: #ef4444 !important;
+    background-color: #fef2f2 !important;
+}
+.input-success {
+    border-color: #10b981 !important;
+}
+.error-text {
+    color: #ef4444;
+    font-size: 12px;
+    margin-top: 4px;
+    display: block;
+}
+
+/* Password Toggle */
+.pwd-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.pwd-toggle {
+    position: absolute;
+    right: 12px;
+    cursor: pointer;
+    color: #6c757d;
+}
