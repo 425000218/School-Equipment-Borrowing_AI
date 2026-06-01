@@ -14,6 +14,6 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
 
-ENV ASPNETCORE_URLS=http://0.0.0.0:3000
+ENV PORT=3000
 EXPOSE 3000
 ENTRYPOINT ["dotnet", "SEB.Web.dll"]
