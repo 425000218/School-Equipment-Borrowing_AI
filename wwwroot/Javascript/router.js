@@ -100,6 +100,20 @@
             // 5. Cập nhật trạng thái active trên navbar
             updateNavActiveState(url);
 
+            // 5.5. RELOAD config.js ĐẦU TIÊN để API_BASE_URL được tái thiết lập
+            // (Quan trọng: config.js phải chạy trước tất cả scripts khác)
+            const configScript = document.querySelector('script[src*="config.js"]');
+            if (configScript) {
+                configScript.remove();
+            }
+            await new Promise(resolve => {
+                const newConfigScript = document.createElement('script');
+                newConfigScript.src = '/Javascript/config.js?v=' + Date.now(); // Cache buster
+                newConfigScript.onload = resolve;
+                newConfigScript.onerror = resolve; // Tiếp tục dù có lỗi
+                document.head.appendChild(newConfigScript);
+            });
+
             // 6. Chạy các thẻ script động
             if (newWrapper) {
                 executeScripts(newWrapper);
@@ -109,12 +123,13 @@
             const bodyScripts = doc.querySelectorAll('body script');
             bodyScripts.forEach(oldScript => {
                 if (oldScript.src && oldScript.src.includes('router.js')) return;
+                if (oldScript.src && oldScript.src.includes('config.js')) return; // Skip config.js vì đã load rồi
 
                 const scriptSrc = oldScript.getAttribute('src');
                 if (scriptSrc) {
                     // Loại bỏ script cũ cùng tên (nếu có) để nạp lại
                     const existing = document.querySelector(`script[src="${scriptSrc}"]`);
-                    if (existing) {
+                    if (existing && !existing.src.includes('config.js')) {
                         existing.remove();
                     }
                     const newScript = document.createElement('script');
