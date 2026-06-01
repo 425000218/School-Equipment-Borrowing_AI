@@ -4,12 +4,21 @@
 async function initBookingPage() {
     if (!document.querySelectorAll('.slot-btn').length) return; // Exit if not on this page
 
-    // 1. Kiểm tra đăng nhập
-    if (window.SEBAuth && typeof window.SEBAuth.requireAuth === 'function') {
-        const loggedIn = window.SEBAuth.requireAuth({
-            message: 'Bạn cần đăng nhập để xem lịch và gửi yêu cầu đăng ký phòng học.'
-        });
-        if (!loggedIn) return;
+    // 1. Kiểm tra đăng nhập: restore session từ server để đảm bảo cookie auth tồn tại
+    if (window.SEBAuth) {
+        // Nếu server có session/cookie, restoreSessionFromServer sẽ trả về true
+        // Nếu không, chuyển hướng sang trang đăng nhập
+        try {
+            const restored = await window.SEBAuth.restoreSessionFromServer();
+            if (!restored) {
+                window.SEBAuth.goToLogin();
+                return;
+            }
+        } catch (e) {
+            console.warn('restoreSessionFromServer failed', e);
+            window.SEBAuth.goToLogin();
+            return;
+        }
     }
 
     // 2. Định nghĩa các biến toàn cục quản lý lịch
