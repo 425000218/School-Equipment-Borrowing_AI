@@ -246,6 +246,9 @@ document.addEventListener('DOMContentLoaded', async function () {
 
             // 2. Điền lịch bận
             bookings.forEach(b => {
+                // Chỉ hiển thị các trạng thái hợp lệ (bỏ qua cancelled, rejected)
+                if (b.status === 'cancelled' || b.status === 'rejected') return;
+
                 const bookingDateObj = new Date(b.bookingDate);
                 const dayIndex = getDayOfWeekIndex(bookingDateObj); // 2 -> 6
                 if (dayIndex < 2 || dayIndex > 6) return;
@@ -254,9 +257,15 @@ document.addEventListener('DOMContentLoaded', async function () {
                 const btn = document.querySelector(`.slot-btn[data-day-index="${dayIndex}"][data-slot="${slot}"]`);
                 if (btn) {
                     btn.className = 'slot-btn busy';
-                    btn.style.backgroundColor = '#f44336'; // Màu đỏ khi bận
-                    btn.innerText = b.requesterFullName ? `GV. ${b.requesterFullName}` : 'Có lịch';
-                    btn.title = `Mục đích: ${b.purpose || 'Không có'}`;
+                    btn.style.backgroundColor = '#ef4444'; // Đỏ nổi bật
+                    btn.style.color = '#ffffff';
+                    btn.style.cursor = 'not-allowed';
+                    btn.disabled = true; // Khóa button
+                    btn.innerText = 'Đã đặt';
+                    
+                    let hoverText = `Người đặt: ${b.requesterFullName || b.requesterUsername}`;
+                    if (b.purpose) hoverText += `\nMục đích: ${b.purpose}`;
+                    btn.title = hoverText;
                 }
             });
 
@@ -334,6 +343,9 @@ document.addEventListener('DOMContentLoaded', async function () {
         slotButtons.forEach(btn => {
             btn.className = 'slot-btn empty';
             btn.style.backgroundColor = '';
+            btn.style.color = '';
+            btn.style.cursor = '';
+            btn.disabled = false;
             btn.innerText = 'Trống';
             btn.title = '';
         });
