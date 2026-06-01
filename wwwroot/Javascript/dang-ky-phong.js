@@ -2,8 +2,7 @@
 // Quản lý nghiệp vụ đặt phòng học, đồng bộ dữ liệu thời gian thực từ API
 
 async function initBookingPage() {
-    const slotButtons = document.querySelectorAll('.slot-btn');
-    if (slotButtons.length === 0) return; // Exit if not on this page
+    if (!document.querySelectorAll('.slot-btn').length) return; // Exit if not on this page
 
     // 1. Kiểm tra đăng nhập
     if (window.SEBAuth && typeof window.SEBAuth.requireAuth === 'function') {
@@ -22,6 +21,7 @@ async function initBookingPage() {
     const submitBtn = document.querySelector('.btn-submit-booking');
     const roomTypeSelect = document.getElementById('room-type-select');
     const roomNumberSelect = document.getElementById('room-number-select');
+    const bookingDateInput = document.getElementById('booking-date-input');
     const prevWeekBtn = document.getElementById('prev-week-btn');
     const nextWeekBtn = document.getElementById('next-week-btn');
     const currentWeekLabel = document.getElementById('current-week-label');
@@ -35,9 +35,19 @@ async function initBookingPage() {
     if (roomNumberSelect) {
         roomNumberSelect.addEventListener('change', fetchBookings);
     }
+    if (bookingDateInput) {
+        bookingDateInput.value = formatYMD(new Date());
+        bookingDateInput.addEventListener('change', () => {
+            if (!bookingDateInput.value) return;
+            currentMonday = getMonday(new Date(bookingDateInput.value));
+            updateWeekHeaders();
+            fetchBookings();
+        });
+    }
     if (prevWeekBtn) {
         prevWeekBtn.addEventListener('click', () => {
             currentMonday.setDate(currentMonday.getDate() - 7);
+            if (bookingDateInput) bookingDateInput.value = formatYMD(currentMonday);
             updateWeekHeaders();
             fetchBookings();
         });
@@ -45,6 +55,7 @@ async function initBookingPage() {
     if (nextWeekBtn) {
         nextWeekBtn.addEventListener('click', () => {
             currentMonday.setDate(currentMonday.getDate() + 7);
+            if (bookingDateInput) bookingDateInput.value = formatYMD(currentMonday);
             updateWeekHeaders();
             fetchBookings();
         });
@@ -226,6 +237,10 @@ async function initBookingPage() {
         if (!roomCode) {
             // Reset toàn bộ bảng về trống
             resetTimetable();
+            const listContainer = document.getElementById('booking-list-content');
+            if (listContainer) {
+                listContainer.innerHTML = '<div style="color: #64748b; font-size: 0.95rem; text-align: center; padding: 10px;">Vui lòng chọn phòng học để xem lịch và trạng thái.</div>';
+            }
             return;
         }
 
