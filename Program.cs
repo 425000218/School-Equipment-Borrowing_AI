@@ -258,7 +258,9 @@ static void SetAuthCookie(HttpContext httpContext, IConfiguration config, string
     {
         HttpOnly = true,
         Secure = httpContext.Request.IsHttps,
-        SameSite = SameSiteMode.Lax,
+        // Allow cross-site requests (e.g., localhost -> production) to send cookie
+        // Browsers require Secure=true when SameSite=None
+        SameSite = SameSiteMode.None,
         Expires = expiresUtc,
         Path = "/"
     });
@@ -269,7 +271,7 @@ static void ClearAuthCookie(HttpContext httpContext)
     httpContext.Response.Cookies.Delete(AuthCookieName, new CookieOptions
     {
         Path = "/",
-        SameSite = SameSiteMode.Lax,
+        SameSite = SameSiteMode.None,
         Secure = httpContext.Request.IsHttps
     });
 }
