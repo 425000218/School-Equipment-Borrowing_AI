@@ -1569,6 +1569,113 @@ app.MapPost("/api/room-bookings/{bookingNo}/actions", async (
 });
 
 
+// --- API User Dashboard ---
+app.MapGet("/api/user/borrow-requests", async (HttpContext httpContext, IConfiguration config, CancellationToken ct) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null) return Results.Unauthorized();
+
+    var connectionString = GetMssqlConnectionString(config);
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync(ct);
+    await using var command = new SqlCommand("dbo.sp_User_MyBorrowRequests_List", connection) { CommandType = CommandType.StoredProcedure };
+    command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = authUser.Username });
+
+    var list = new List<object>();
+    await using var reader = await command.ExecuteReaderAsync(ct);
+    while (await reader.ReadAsync(ct))
+    {
+        list.Add(new {
+            id = reader.GetInt32(reader.GetOrdinal("id")),
+            requestNo = reader.GetString(reader.GetOrdinal("requestNo")),
+            requesterUsername = reader.GetString(reader.GetOrdinal("requesterUsername")),
+            requesterFullName = ReadNullableString(reader, "requesterFullName"),
+            deviceCode = reader.GetString(reader.GetOrdinal("deviceCode")),
+            deviceName = ReadNullableString(reader, "deviceName"),
+            deviceImageUrl = ReadNullableString(reader, "deviceImageUrl"),
+            quantity = reader.GetInt32(reader.GetOrdinal("quantity")),
+            status = reader.GetString(reader.GetOrdinal("status")),
+            createdAt = reader.GetDateTime(reader.GetOrdinal("createdAt"))
+        });
+    }
+    return Results.Ok(list);
+});
+
+app.MapGet("/api/user/room-bookings", async (HttpContext httpContext, IConfiguration config, CancellationToken ct) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null) return Results.Unauthorized();
+
+    var connectionString = GetMssqlConnectionString(config);
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync(ct);
+    await using var command = new SqlCommand("dbo.sp_User_MyRoomBookings_List", connection) { CommandType = CommandType.StoredProcedure };
+    command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = authUser.Username });
+
+    var list = new List<object>();
+    await using var reader = await command.ExecuteReaderAsync(ct);
+    while (await reader.ReadAsync(ct))
+    {
+        list.Add(new {
+            id = reader.GetInt32(reader.GetOrdinal("id")),
+            bookingNo = reader.GetString(reader.GetOrdinal("bookingNo")),
+            requesterUsername = reader.GetString(reader.GetOrdinal("requesterUsername")),
+            requesterFullName = ReadNullableString(reader, "requesterFullName"),
+            roomCode = reader.GetString(reader.GetOrdinal("roomCode")),
+            roomName = ReadNullableString(reader, "roomName"),
+            bookingDate = reader.GetDateTime(reader.GetOrdinal("bookingDate")),
+            slot = reader.GetString(reader.GetOrdinal("slot")),
+            purpose = ReadNullableString(reader, "purpose"),
+            status = reader.GetString(reader.GetOrdinal("status")),
+            createdAt = reader.GetDateTime(reader.GetOrdinal("createdAt"))
+        });
+    }
+    return Results.Ok(list);
+});
+
+app.MapPut("/api/user/borrow-requests/{id}/cancel", async (HttpContext httpContext, IConfiguration config, int id, CancellationToken ct) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null) return Results.Unauthorized();
+
+    var connectionString = GetMssqlConnectionString(config);
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+        await using var command = new SqlCommand("dbo.sp_User_CancelBorrowRequest", connection) { CommandType = CommandType.StoredProcedure };
+        command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = authUser.Username });
+        await command.ExecuteNonQueryAsync(ct);
+        return Results.Ok(new { success = true });
+    }
+    catch (SqlException ex) when (ex.Number == 50000 || ex.Number == 50001)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+app.MapPut("/api/user/room-bookings/{id}/cancel", async (HttpContext httpContext, IConfiguration config, int id, CancellationToken ct) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null) return Results.Unauthorized();
+
+    var connectionString = GetMssqlConnectionString(config);
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+        await using var command = new SqlCommand("dbo.sp_User_CancelRoomBooking", connection) { CommandType = CommandType.StoredProcedure };
+        command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = authUser.Username });
+        await command.ExecuteNonQueryAsync(ct);
+        return Results.Ok(new { success = true });
+    }
+    catch (SqlException ex) when (ex.Number == 50000 || ex.Number == 50001)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
 
 // --- API User Registration & Profile ---
 app.MapPost("/api/users/register", async (HttpContext httpContext, IConfiguration config, RegisterRequest body, CancellationToken ct) =>

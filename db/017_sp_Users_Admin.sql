@@ -217,10 +217,46 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    IF NOT EXISTS (SELECT 1 FROM dbo.borrow_requests WHERE id = @Id)
+    DECLARE @CurrentStatus NVARCHAR(20);
+    SELECT @CurrentStatus = status FROM dbo.borrow_requests WHERE id = @Id;
+
+    IF @CurrentStatus IS NULL
     BEGIN
         THROW 50000, N'Phiếu mượn không tồn tại.', 1;
         RETURN;
+    END
+
+    BEGIN TRANSACTION;
+
+    -- Handle Inventory Deduction
+    IF @Status = 'approved' AND @CurrentStatus = 'pending'
+    BEGIN
+        -- Check if enough inventory exists
+        IF EXISTS (
+            SELECT 1 FROM dbo.borrow_request_items i
+            JOIN dbo.devices d ON i.device_code = d.code
+            WHERE i.borrow_request_id = @Id AND d.quantity < i.quantity
+        )
+        BEGIN
+            ROLLBACK TRANSACTION;
+            THROW 50001, N'Không đủ số lượng tồn kho để duyệt phiếu này.', 1;
+            RETURN;
+        END
+
+        UPDATE d
+        SET d.quantity = d.quantity - i.quantity
+        FROM dbo.devices d
+        JOIN dbo.borrow_request_items i ON d.code = i.device_code
+        WHERE i.borrow_request_id = @Id;
+    END
+    -- Handle Inventory Restoration
+    ELSE IF (@Status = 'returned' OR @Status = 'rejected') AND @CurrentStatus = 'approved'
+    BEGIN
+        UPDATE d
+        SET d.quantity = d.quantity + i.quantity
+        FROM dbo.devices d
+        JOIN dbo.borrow_request_items i ON d.code = i.device_code
+        WHERE i.borrow_request_id = @Id;
     END
 
     UPDATE dbo.borrow_requests
@@ -230,6 +266,8 @@ BEGIN
         handled_note = @HandledNote,
         updated_at = SYSUTCDATETIME()
     WHERE id = @Id;
+
+    COMMIT TRANSACTION;
 
     -- Return full updated record
     SELECT 

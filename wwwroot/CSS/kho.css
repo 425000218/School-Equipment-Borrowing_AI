@@ -18,10 +18,17 @@
 }
 
 .sidebar {
-    background-color: #f8f9fa;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  width: 250px;
+  background-color: #ffffff;
+  padding: 20px;
+  border-right: 1px solid var(--card-border);
+  flex-shrink: 0;
+  min-height: calc(100vh - 200px);
+  position: sticky;
+  top: 20px;
+  align-self: flex-start;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
 }
 
 .sidebar h3 {

@@ -56,24 +56,8 @@
             </div>
 
             <div id="app" class="kho-app">
-                <aside class="sidebar">
-                    <h3 class="kho-search-wrap">Lịch sử mượn gần đây</h3>
-                    <label for="borrow-actor-select" style="display:block; margin-bottom:6px; color:#475569; font-size:0.9rem;">Người duyệt</label>
-                    <select id="borrow-actor-select" class="kho-select" style="margin-bottom: 12px; width: 100%;">
-                        <option value="">Đang tải người duyệt...</option>
-                    </select>
-                    <label for="borrow-user-select" style="display:block; margin-bottom:6px; color:#475569; font-size:0.9rem;">Người mượn</label>
-                    <select id="borrow-user-select" class="kho-select" style="margin-bottom: 12px; width: 100%;">
-                        <option value="">Đang tải người dùng...</option>
-                    </select>
-                    <ul id="borrow-history-list" class="borrow-list">
-                        <li class="borrow-empty">Chưa có lịch sử mượn.</li>
-                    </ul>
-                </aside>
-
-                <main class="content">
+                <main class="content" style="width: 100%;">
                     <h1>Kho Cá Nhân</h1>
-
                     <!-- Cập nhật hồ sơ -->
                     <div class="profile-edit-box" style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin-bottom:24px;">
                         <h3 style="margin-top:0; color:#0f172a; margin-bottom:16px;">Thông tin tài khoản</h3>
@@ -100,19 +84,47 @@
                         </form>
                     </div>
 
-                    <div class="search-bar kho-select-wrap">
-                        <select id="filter-category" class="kho-select">
-                            <option value="">Tất cả danh mục</option>
-                        </select>
-                        <select id="filter-subject" class="kho-select">
-                            <option value="">Tất cả môn học</option>
-                        </select>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:15px; align-items:center;">
+                        <h2>Thiết Bị Đang Mượn</h2>
                     </div>
-                    <div class="equipment-grid" id="equipment-grid">
-                        <!-- Data will be rendered here by ../javascript/kho_thiet_bi.js -->
+                    <div style="overflow-x: auto; margin-bottom: 30px; background:#fff; border-radius:8px; border:1px solid #e2e8f0; padding:15px;">
+                        <table style="width:100%; border-collapse: collapse; text-align:left;" class="data-table">
+                            <thead>
+                                <tr style="border-bottom: 2px solid #e2e8f0; background:#f8fafc;">
+                                    <th style="padding:10px;">Mã Phiếu</th>
+                                    <th style="padding:10px;">Thiết Bị</th>
+                                    <th style="padding:10px;">SL</th>
+                                    <th style="padding:10px;">Ngày Tạo</th>
+                                    <th style="padding:10px;">Trạng Thái</th>
+                                    <th style="padding:10px;">Thao Tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="my-borrows-tbody">
+                                <tr><td colspan="6" style="padding:15px; text-align:center;">Đang tải...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
 
-                    <div id="pagination-container" class="pagination"></div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:15px; align-items:center;">
+                        <h2>Phòng Học Đã Đặt</h2>
+                    </div>
+                    <div style="overflow-x: auto; background:#fff; border-radius:8px; border:1px solid #e2e8f0; padding:15px;">
+                        <table style="width:100%; border-collapse: collapse; text-align:left;" class="data-table">
+                            <thead>
+                                <tr style="border-bottom: 2px solid #e2e8f0; background:#f8fafc;">
+                                    <th style="padding:10px;">Mã Đặt</th>
+                                    <th style="padding:10px;">Phòng</th>
+                                    <th style="padding:10px;">Ngày Đặt</th>
+                                    <th style="padding:10px;">Tiết</th>
+                                    <th style="padding:10px;">Trạng Thái</th>
+                                    <th style="padding:10px;">Thao Tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="my-bookings-tbody">
+                                <tr><td colspan="6" style="padding:15px; text-align:center;">Đang tải...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </main>
             </div>
         </section>
@@ -135,7 +147,7 @@
     <script src="../Javascript/auth.js"></script>
     <script src="../Javascript/Java.js"></script>
     <script src="../Javascript/device_modal.js"></script>
-    <script src="../Javascript/kho_thiet_bi.js"></script>
+    <script src="../Javascript/user_dashboard.js"></script>
 
     <script>
         (async function(){
