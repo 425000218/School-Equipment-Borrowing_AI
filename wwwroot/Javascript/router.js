@@ -45,6 +45,28 @@
 
             // 1. Kiểm tra xác thực ngay trước khi vẽ DOM mới (để tránh chớp trắng lộ giao diện)
             const targetHead = doc.querySelector('head');
+            
+            // Nạp động các stylesheet mới từ trang đích vào <head> hiện tại để tránh lỗi mất CSS
+            if (targetHead) {
+                const targetStylesheets = targetHead.querySelectorAll('link[rel="stylesheet"]');
+                targetStylesheets.forEach(link => {
+                    const linkHref = link.getAttribute('href');
+                    if (linkHref) {
+                        // Phân giải URL tương đối của stylesheet so với URL trang đích
+                        const resolvedHref = new URL(linkHref, new URL(url, window.location.origin)).href;
+                        
+                        // Kiểm tra xem stylesheet này đã tồn tại trong head chưa
+                        const exists = Array.from(document.querySelectorAll('head link[rel="stylesheet"]')).some(el => el.href === resolvedHref);
+                        if (!exists) {
+                            const newLink = document.createElement('link');
+                            newLink.rel = 'stylesheet';
+                            newLink.href = resolvedHref;
+                            document.head.appendChild(newLink);
+                        }
+                    }
+                });
+            }
+
             const hasAuthCheck = targetHead && targetHead.innerHTML.includes('Immediate Auth Check');
             if (hasAuthCheck) {
                 if (!sessionStorage.getItem('seb.authUser') && !localStorage.getItem('seb.authUser')) {
@@ -144,11 +166,11 @@
         const href = link.getAttribute('href');
         if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
 
-        const targetUrl = new URL(href, window.location.origin);
+        const targetUrl = new URL(href, window.location.href);
         if (targetUrl.origin !== window.location.origin) return;
 
         e.preventDefault();
-        loadPage(href, true);
+        loadPage(targetUrl.pathname + targetUrl.search + targetUrl.hash, true);
     });
 
     // Lắng nghe sự kiện Back/Forward của trình duyệt
