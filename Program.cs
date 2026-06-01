@@ -1568,7 +1568,7 @@ app.MapPost("/api/room-bookings/{bookingNo}/actions", async (
     }
 });
 
-});
+
 
 // --- API User Registration & Profile ---
 app.MapPost("/api/users/register", async (HttpContext httpContext, IConfiguration config, RegisterRequest body, CancellationToken ct) =>
