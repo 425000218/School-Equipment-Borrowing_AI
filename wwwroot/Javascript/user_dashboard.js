@@ -31,6 +31,12 @@ function loadUserProfile() {
     
     document.getElementById('prof-username').value = user.username || '';
     document.getElementById('prof-fullname').value = user.fullName || '';
+    
+    const sidebarName = document.getElementById('sidebar-fullname');
+    const sidebarRole = document.getElementById('sidebar-role');
+    if (sidebarName) sidebarName.innerText = user.fullName || user.username;
+    if (sidebarRole) sidebarRole.innerText = (user.role === 'admin' ? 'Quản trị viên' : 'Giáo viên');
+    
     // email and phone can be fetched from a /profile API if it returns them
 }
 
