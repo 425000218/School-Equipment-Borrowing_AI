@@ -1,0 +1,16 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/.git/
+**/.github/
+**/node_modules/
+**/*.user
+**/*.userosscache
+**/*.suo
+**/*.pdb
+**/*.log
+**/*.zip
+**/*.tar.gz
+**/.DS_Store
+wwwroot/Audio/Audio.mp3
