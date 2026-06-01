@@ -170,7 +170,7 @@ BEGIN
         u.full_name AS requesterFullName,
         ISNULL(i.device_code, '') AS deviceCode,
         d.name AS deviceName,
-        d.image_url AS deviceImageUrl,
+        d.image_file AS deviceImageUrl,
         ISNULL(i.quantity, 1) AS quantity,
         r.status,
         r.created_at AS createdAt
