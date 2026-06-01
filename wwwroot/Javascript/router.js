@@ -100,19 +100,29 @@
             // 5. Cập nhật trạng thái active trên navbar
             updateNavActiveState(url);
 
-            // 5.5. RELOAD config.js ĐẦU TIÊN để API_BASE_URL được tái thiết lập
-            // (Quan trọng: config.js phải chạy trước tất cả scripts khác)
-            const configScript = document.querySelector('script[src*="config.js"]');
-            if (configScript) {
-                configScript.remove();
+            // 5.5. Reload `config.js` only when necessary to avoid slowing navigation
+            // Conditions to reload:
+            // - `window.API_BASE_URL` is missing/empty OR
+            // - `window.__configLoadedAtHost` doesn't match current hostname (host changed)
+            const needReloadConfig = !window.API_BASE_URL
+                || window.API_BASE_URL === ''
+                || (window.__configLoadedAtHost && window.__configLoadedAtHost !== window.location.hostname);
+
+            if (needReloadConfig) {
+                const existingConfig = document.querySelector('script[src*="config.js"]');
+                if (existingConfig) existingConfig.remove();
+
+                await new Promise(resolve => {
+                    const newConfigScript = document.createElement('script');
+                    newConfigScript.src = '/Javascript/config.js?v=' + Date.now(); // cache-buster when reloading
+                    newConfigScript.onload = () => {
+                        try { window.__configLoadedAtHost = window.location.hostname; } catch(e) {}
+                        resolve();
+                    };
+                    newConfigScript.onerror = () => resolve(); // continue even if config fails
+                    document.head.appendChild(newConfigScript);
+                });
             }
-            await new Promise(resolve => {
-                const newConfigScript = document.createElement('script');
-                newConfigScript.src = '/Javascript/config.js?v=' + Date.now(); // Cache buster
-                newConfigScript.onload = resolve;
-                newConfigScript.onerror = resolve; // Tiếp tục dù có lỗi
-                document.head.appendChild(newConfigScript);
-            });
 
             // 6. Chạy các thẻ script động
             if (newWrapper) {
