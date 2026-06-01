@@ -206,3 +206,72 @@ BEGIN
     ORDER BY b.created_at DESC;
 END
 GO
+
+-- 8. Admin: Cập nhật trạng thái phiếu mượn
+CREATE OR ALTER PROCEDURE dbo.sp_Admin_UpdateBorrowStatus
+    @Id INT,
+    @Status NVARCHAR(20),
+    @HandledBy NVARCHAR(50),
+    @HandledNote NVARCHAR(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM dbo.borrow_requests WHERE id = @Id)
+    BEGIN
+        THROW 50000, N'Phiếu mượn không tồn tại.', 1;
+        RETURN;
+    END
+
+    UPDATE dbo.borrow_requests
+    SET 
+        status = @Status,
+        handled_by = @HandledBy,
+        handled_note = @HandledNote,
+        updated_at = SYSUTCDATETIME()
+    WHERE id = @Id;
+
+    -- Return full updated record
+    SELECT 
+        r.id,
+        r.request_no AS requestNo,
+        r.requester_username AS requesterUsername,
+        r.status
+    FROM dbo.borrow_requests AS r
+    WHERE r.id = @Id;
+END
+GO
+
+-- 9. Admin: Cập nhật trạng thái phòng học
+CREATE OR ALTER PROCEDURE dbo.sp_Admin_UpdateRoomStatus
+    @Id INT,
+    @Status NVARCHAR(20),
+    @HandledBy NVARCHAR(50),
+    @HandledNote NVARCHAR(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM dbo.room_bookings WHERE id = @Id)
+    BEGIN
+        THROW 50000, N'Lịch phòng không tồn tại.', 1;
+        RETURN;
+    END
+
+    UPDATE dbo.room_bookings
+    SET 
+        status = @Status,
+        handled_by = @HandledBy,
+        handled_note = @HandledNote,
+        updated_at = SYSUTCDATETIME()
+    WHERE id = @Id;
+
+    SELECT 
+        id,
+        booking_no AS bookingNo,
+        requester_username AS requesterUsername,
+        status
+    FROM dbo.room_bookings
+    WHERE id = @Id;
+END
+GO

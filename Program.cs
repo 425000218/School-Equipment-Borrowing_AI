@@ -1765,6 +1765,46 @@ app.MapGet("/api/admin/room-bookings", async (HttpContext httpContext, IConfigur
     return Results.Ok(new { bookings });
 });
 
+app.MapPut("/api/admin/borrow-requests/{id}/status", async (HttpContext httpContext, IConfiguration config, int id, AdminStatusUpdateRequest body, CancellationToken ct) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null || authUser.Role != "admin") return Results.Unauthorized();
+    var connectionString = GetMssqlConnectionString(config);
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+        await using var command = new SqlCommand("dbo.sp_Admin_UpdateBorrowStatus", connection) { CommandType = CommandType.StoredProcedure };
+        command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
+        command.Parameters.Add(new SqlParameter("@Status", SqlDbType.NVarChar, 20) { Value = body.Status.Trim() });
+        command.Parameters.Add(new SqlParameter("@HandledBy", SqlDbType.NVarChar, 50) { Value = authUser.Username });
+        command.Parameters.Add(new SqlParameter("@HandledNote", SqlDbType.NVarChar, -1) { Value = string.IsNullOrWhiteSpace(body.HandledNote) ? DBNull.Value : body.HandledNote.Trim() });
+        await command.ExecuteNonQueryAsync(ct);
+        return Results.Ok(new { success = true });
+    }
+    catch (SqlException ex) when (ex.Number == 50000) { return Results.BadRequest(new { error = ex.Message }); }
+});
+
+app.MapPut("/api/admin/room-bookings/{id}/status", async (HttpContext httpContext, IConfiguration config, int id, AdminStatusUpdateRequest body, CancellationToken ct) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null || authUser.Role != "admin") return Results.Unauthorized();
+    var connectionString = GetMssqlConnectionString(config);
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+        await using var command = new SqlCommand("dbo.sp_Admin_UpdateRoomStatus", connection) { CommandType = CommandType.StoredProcedure };
+        command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
+        command.Parameters.Add(new SqlParameter("@Status", SqlDbType.NVarChar, 20) { Value = body.Status.Trim() });
+        command.Parameters.Add(new SqlParameter("@HandledBy", SqlDbType.NVarChar, 50) { Value = authUser.Username });
+        command.Parameters.Add(new SqlParameter("@HandledNote", SqlDbType.NVarChar, -1) { Value = string.IsNullOrWhiteSpace(body.HandledNote) ? DBNull.Value : body.HandledNote.Trim() });
+        await command.ExecuteNonQueryAsync(ct);
+        return Results.Ok(new { success = true });
+    }
+    catch (SqlException ex) when (ex.Number == 50000) { return Results.BadRequest(new { error = ex.Message }); }
+});
+
 app.Run();
 
 record LookupOption(string value, string label);
@@ -1777,6 +1817,7 @@ record ClearLockoutRequest(string? Username, bool ClearAll);
 record RegisterRequest(string Username, string Password, string FullName, string? Email, string? Phone);
 record UpdateProfileRequest(string FullName, string? Email, string? Phone);
 record AdminUserUpdateRequest(string FullName, string? Email, string? Phone, string Role, string Status);
+record AdminStatusUpdateRequest(string Status, string? HandledNote);
 
 sealed class LoginThrottleState
 {

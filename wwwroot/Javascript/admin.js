@@ -135,7 +135,7 @@ async function deleteUser(username) {
 // =================== BORROWS ===================
 async function loadBorrows() {
     const tbody = document.getElementById('admin-borrows-tbody');
-    tbody.innerHTML = '<tr><td colspan="5">Đang tải...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6">Đang tải...</td></tr>';
     
     try {
         const resp = await fetch((window.API_BASE_URL || '') + '/api/admin/borrow-requests');
@@ -143,7 +143,7 @@ async function loadBorrows() {
         const data = await resp.json();
         
         if (!data.requests || data.requests.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5">Không có dữ liệu</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6">Không có dữ liệu</td></tr>';
             return;
         }
 
@@ -151,20 +151,44 @@ async function loadBorrows() {
             <tr>
                 <td><strong>${r.requestNo}</strong></td>
                 <td>${r.requesterFullName || r.requesterUsername}</td>
-                <td>${r.device?.name || r.deviceCode} (SL: ${r.device?.quantity || 1})</td>
+                <td>${r.device?.name || r.deviceCode} (SL: ${r.quantity || 1})</td>
                 <td>${getStatusBadge(r.status)}</td>
                 <td>${new Date(r.createdAt).toLocaleString('vi-VN')}</td>
+                <td>
+                    ${r.status === 'pending' ? `
+                        <button class="btn-action" style="color:#166534; border-color:#bbf7d0;" onclick="updateBorrowStatus(${r.id}, 'approved')">Duyệt</button>
+                        <button class="btn-action btn-danger" onclick="updateBorrowStatus(${r.id}, 'rejected')">Từ chối</button>
+                    ` : ''}
+                    ${r.status === 'approved' ? `
+                        <button class="btn-action" style="color:#0284c7; border-color:#bae6fd;" onclick="updateBorrowStatus(${r.id}, 'returned')">Đã trả</button>
+                    ` : ''}
+                </td>
             </tr>
         `).join('');
     } catch(err) {
-        tbody.innerHTML = '<tr><td colspan="5" style="color:red">Lỗi tải phiếu mượn</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="color:red">Lỗi tải phiếu mượn</td></tr>';
     }
+}
+
+async function updateBorrowStatus(id, status) {
+    if (!confirm(`Bạn muốn chuyển trạng thái thành ${status}?`)) return;
+    try {
+        const resp = await fetch((window.API_BASE_URL || '') + `/api/admin/borrow-requests/${id}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status, handledNote: '' })
+        });
+        if (resp.ok) {
+            loadBorrows();
+            if (window.showToast) window.showToast('Cập nhật thành công', 'success');
+        } else alert('Lỗi cập nhật');
+    } catch(err) { alert('Lỗi kết nối'); }
 }
 
 // =================== ROOMS ===================
 async function loadRooms() {
     const tbody = document.getElementById('admin-rooms-tbody');
-    tbody.innerHTML = '<tr><td colspan="5">Đang tải...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6">Đang tải...</td></tr>';
     
     try {
         const resp = await fetch((window.API_BASE_URL || '') + '/api/admin/room-bookings');
@@ -172,7 +196,7 @@ async function loadRooms() {
         const data = await resp.json();
         
         if (!data.bookings || data.bookings.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5">Không có dữ liệu</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6">Không có dữ liệu</td></tr>';
             return;
         }
 
@@ -183,9 +207,30 @@ async function loadRooms() {
                 <td>${b.roomName || b.roomCode}</td>
                 <td>Tiết ${b.slot} - ${new Date(b.bookingDate).toLocaleDateString('vi-VN')}</td>
                 <td>${getStatusBadge(b.status)}</td>
+                <td>
+                    ${b.status === 'pending' ? `
+                        <button class="btn-action" style="color:#166534; border-color:#bbf7d0;" onclick="updateRoomStatus(${b.id}, 'approved')">Duyệt</button>
+                        <button class="btn-action btn-danger" onclick="updateRoomStatus(${b.id}, 'rejected')">Từ chối</button>
+                    ` : ''}
+                </td>
             </tr>
         `).join('');
     } catch(err) {
-        tbody.innerHTML = '<tr><td colspan="5" style="color:red">Lỗi tải lịch phòng</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="color:red">Lỗi tải lịch phòng</td></tr>';
     }
+}
+
+async function updateRoomStatus(id, status) {
+    if (!confirm(`Bạn muốn chuyển trạng thái thành ${status}?`)) return;
+    try {
+        const resp = await fetch((window.API_BASE_URL || '') + `/api/admin/room-bookings/${id}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status, handledNote: '' })
+        });
+        if (resp.ok) {
+            loadRooms();
+            if (window.showToast) window.showToast('Cập nhật thành công', 'success');
+        } else alert('Lỗi cập nhật');
+    } catch(err) { alert('Lỗi kết nối'); }
 }
