@@ -168,16 +168,15 @@ BEGIN
         r.request_no AS requestNo,
         r.requester_username AS requesterUsername,
         u.full_name AS requesterFullName,
-        r.device_code AS deviceCode,
+        ISNULL(i.device_code, '') AS deviceCode,
         d.name AS deviceName,
         d.image_url AS deviceImageUrl,
-        r.quantity,
-        r.purpose,
-        r.expected_return_date AS expectedReturnDate,
+        ISNULL(i.quantity, 1) AS quantity,
         r.status,
         r.created_at AS createdAt
     FROM dbo.borrow_requests AS r
-    LEFT JOIN dbo.devices AS d ON r.device_code = d.code
+    LEFT JOIN dbo.borrow_request_items AS i ON r.id = i.borrow_request_id
+    LEFT JOIN dbo.devices AS d ON i.device_code = d.code
     LEFT JOIN dbo.users AS u ON r.requester_username = u.username
     ORDER BY r.created_at DESC;
 END
