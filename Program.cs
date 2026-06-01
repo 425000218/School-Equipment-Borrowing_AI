@@ -1,11 +1,14 @@
 using Microsoft.Data.SqlClient;
 using System.Collections.Concurrent;
 using System.Data;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.UseContentRoot(Directory.GetCurrentDirectory());
+builder.WebHost.UseWebRoot("wwwroot");
 
 static string? GetMssqlConnectionString(IConfiguration config)
 {
