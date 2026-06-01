@@ -184,6 +184,15 @@
     <script src="../Javascript/auth.js"></script>
     <script>
         (async function () {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('redirect')) {
+                setTimeout(() => {
+                    if (window.showToast) {
+                        window.showToast('Bạn cần đăng nhập để truy cập trang này.', 'warning');
+                    }
+                }, 300);
+            }
+
             if (window.SEBAuth && await window.SEBAuth.restoreSessionFromServer()) {
                 window.SEBAuth.redirectAfterLogin('/Page/kho-ca-nhan.html');
                 return;
@@ -325,6 +334,7 @@
             }
         }
     </script>
+    <script src="../Javascript/router.js"></script>
     <script src="../Javascript/ui-improvements.js"></script>
 </body>
 </html>

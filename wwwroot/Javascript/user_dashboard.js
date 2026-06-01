@@ -1,6 +1,9 @@
 // user_dashboard.js
 
-document.addEventListener('DOMContentLoaded', () => {
+async function initUserDashboard() {
+    const tbody = document.getElementById('my-borrows-tbody');
+    if (!tbody) return; // Exit if not on this page
+
     // 1. Restore session & setup UI
     if (window.SEBAuth) {
         window.SEBAuth.restoreSessionFromServer().then(isLoggedIn => {
@@ -23,7 +26,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (window.SEBUI) window.SEBUI.showToast('Chức năng cập nhật hồ sơ đang được hoàn thiện!', 'info');
         });
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initUserDashboard);
+} else {
+    initUserDashboard();
+}
+window.addEventListener('seb:page-loaded', initUserDashboard);
 
 function loadUserProfile() {
     const user = window.SEBAuth.getUser();

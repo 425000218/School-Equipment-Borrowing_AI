@@ -15,6 +15,201 @@
     mermaid.initialize({ startOnLoad: true });
   </script>
     <link rel="stylesheet" href="../CSS/ui-improvements.css">
+    <meta name="view-transition" content="same-origin">
+</head>
+
+<body>
+
+  <div class="system-container">
+
+    <!-- Header -->
+    <header class="header-banner">
+      <div class="header-logo-box">
+        <img src="../Images/logo.png" alt="Logo Lộc An">
+      </div>
+      <div class="header-title-group">
+        <h2>TRƯỜNG TRUNG HỌC CƠ SỞ LỘC AN</h2>
+        <h1>HỆ THỐNG MƯỢN/TRẢ THIẾT BỊ ( SEB )</h1>
+      </div>
+      <div class="header-right">
+        <button class="icon-btn"><i class="far fa-user"></i></button>
+        <button class="icon-btn"><i class="fas fa-pencil-alt"></i></button>
+      </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="nav-bar" id="mainNav">
+      <button class="hamburger-btn" id="hamburgerBtn" aria-label="Mở menu" aria-expanded="false">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="nav-links" id="navLinks">
+        <a href="../index.html" class="nav-tab">Trang chủ</a>
+        <a href="kho_thiet_bi.html" class="nav-tab">Kho thiết bị</a>
+        <a href="dang-ky-phong-hoc.html" class="nav-tab">Đăng ký phòng học</a>
+        <a href="kho-ca-nhan.html" class="nav-tab">Kho cá nhân</a>
+        <a href="news.html" class="nav-tab">Tin tức</a>
+        <a href="about.html" class="nav-tab active">Liên hệ</a>
+      </div>
+    </nav>
+
+    <!-- Mục đích của dự án -->
+    <section class="section-wrapper">
+      <div class="section-heading">
+        <i class="fas fa-target"></i>
+        Mục đích của dự án
+      </div>
+      <div class="maintenance-content">
+        <p>
+          Hiện tại mượn thiết bị vẫn dựa vào ghi chép thủ công, trao đổi trực tiếp hoặc nhắn tin cá nhân.
+          Giáo viên không biết thiết bị còn hay đã mượn, dễ trùng lịch và mất thời gian tìm kiếm, còn nhân viên kho phải kiểm tra sổ sách và xử lý nhiều yêu cầu lặp lại.
+        </p>
+        <div style="text-align: center; margin: 20px 0;">
+          <img src="../Images/bieu-do.png" alt="Biểu đồ tỷ lệ sử dụng phương pháp mượn thiết bị" style="max-width:640px; width:100%; height:auto; border-radius:12px; box-shadow:0 12px 24px rgba(0,0,0,0.12);">
+          <p style="margin-top:12px; font-size:0.94rem; color:#555;">Biểu đồ tỷ lệ hiện tại của quy trình mượn thiết bị trong trường học</p>
+        </div>
+        <p>
+          Từ những bất cập trên, SEB được xây dựng như một "trợ lý số" cho nhà trường: mọi yêu cầu mượn/trả được ghi nhận tập trung, tra cứu nhanh và theo dõi minh bạch theo thời gian thực.
+          Giáo viên biết ngay thiết bị nào đang sẵn sàng, thiết bị nào đã được đặt trước để chủ động kế hoạch giảng dạy.
+        </p>
+        <p>
+          Với bộ phận phụ trách thiết bị, SEB giảm đáng kể thao tác thủ công, hạn chế nhầm lẫn khi kiểm kê, đồng thời hỗ trợ xử lý các trường hợp trễ hạn hoặc thất lạc rõ ràng hơn.
+          Mục tiêu cuối cùng là biến quy trình mượn thiết bị thành một trải nghiệm nhanh, gọn và đáng tin cậy cho toàn trường.
+        </p>
+      </div>
+    </section>
+
+    <!-- Mô tả dự án -->
+    <section class="section-wrapper">
+      <div class="section-heading">
+        <i class="fas fa-info-circle"></i>
+        Mô tả dự án
+      </div>
+      <div class="maintenance-content">
+        <h3>Phần mềm và công nghệ</h3>
+        <p>
+          SEB được phát triển bằng HTML, CSS và JavaScript thuần, không sử dụng framework phức tạp để đảm bảo tính đơn giản và dễ bảo trì.
+          Hệ thống sử dụng kiến trúc web tĩnh với responsive design, tương thích trên mọi thiết bị (desktop, tablet, mobile).
+        </p>
+
+        <h3>Layout và giao diện</h3>
+        <p>
+          Giao diện sử dụng màu xanh dương làm chủ đạo (--primary-blue), font Inter, và các icon FontAwesome.
+          Thiết kế clean, minimal với spacing đều đặn và border-radius cho các element.
+        </p>
+        <div style="text-align: center; margin: 20px 0;">
+          <h4>Layout của trang web SEB</h4>
+          <div class="mermaid">
+graph TD
+    A[Header] --> B[Logo + Title + Buttons]
+    C[Navigation] --> D[Menu Links + Hamburger]
+    E[Main Content] --> F[Search Bar]
+    E --> G[Stats Cards]
+    E --> H[Equipment Grid]
+    E --> I[Maintenance Section]
+    J[Footer] --> K[Copyright + Hotline + QR Tip]
+          </div>
+        </div>
+
+        <h3>Kiến trúc phần mềm</h3>
+        <div style="text-align: center; margin: 20px 0;">
+          <div class="mermaid">
+graph TD
+    A[HTML/CSS/JS Thuần] --> B[Responsive Design]
+    A --> C[No Framework]
+    D[Frontend Only] --> E[Static Web App]
+    D --> F[Client-side Logic]
+    G[Database] --> H[JSON Files/Local Storage]
+    I[Deployment] --> J[Web Server]
+    I --> K[Static Hosting]
+          </div>
+        </div>
+
+        <h3>Flow của trang web</h3>
+        <p>
+          Flow chính: Trang chủ → Chọn chức năng → Xem chi tiết → Thực hiện hành động (mượn/trả).
+        </p>
+        <div style="text-align: center; margin: 20px 0;">
+          <h4>Flow của trang web SEB</h4>
+          <div class="mermaid">
+graph TD
+    A[Trang chủ] --> B[Kho thiết bị]
+    A --> C[Kho cá nhân]
+    A --> D[Tin tức]
+    A --> E[Liên hệ]
+    E --> F[Về dự án]
+    E --> G[Về chúng tôi]
+    G --> H[Đội ngũ phát triển]
+    B --> I[Xem chi tiết thiết bị]
+    C --> J[Lịch sử mượn/trả]
+    D --> K[Đọc tin tức]
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Triển vọng dự án -->
+    <section class="section-wrapper">
+      <div class="section-heading">
+        <i class="fas fa-chart-line"></i>
+        Triển vọng dự án
+      </div>
+      <div class="maintenance-content">
+        <p>
+          SEB có tiềm năng mở rộng thành nền tảng quản lý thiết bị toàn diện cho nhiều trường học.
+          Dự án có thể phát triển thêm tính năng như tích hợp QR code cho mượn nhanh, chatbot hỗ trợ tự động, và hệ thống thông báo qua Zalo.
+        </p>
+        <div class="trend-roadmap">
+          <h4 class="trend-title">Roadmap xu hướng SEB</h4>
+          <div class="trend-grid">
+            <article class="trend-card">
+              <p class="trend-tag">Q1 - Q2</p>
+              <h5>Smart Borrowing</h5>
+              <p>QR mượn nhanh, giảm thao tác tay và rút ngắn thời gian nhận thiết bị.</p>
+            </article>
+            <article class="trend-card">
+              <p class="trend-tag">Q2 - Q3</p>
+              <h5>AI Assistant</h5>
+              <p>Chatbot trả lời câu hỏi lặp lại, hỗ trợ tra cứu trạng thái thiết bị tức thì.</p>
+            </article>
+            <article class="trend-card">
+              <p class="trend-tag">Q3 - Q4</p>
+              <h5>Omni Notifications</h5>
+              <p>Gửi thông báo qua Zalo/email cho lịch mượn, trễ hạn và nhắc trả thiết bị.</p>
+            </article>
+            <article class="trend-card">
+              <p class="trend-tag">Next Stage</p>
+              <h5>Multi-School Platform</h5>
+              <p>Mở rộng liên trường, chuẩn hóa dữ liệu và tạo hệ sinh thái quản lý thiết bị giáo dục.</p>
+            </article>
+          </div>
+        </div>
+        <p>
+          Với chi phí thấp và kiến trúc đơn giản, SEB dễ dàng duy trì và nâng cấp.
+          Triển vọng dài hạn là tạo ra hệ sinh thái số hóa cho các hoạt động quản lý thiết bị trong giáo dục, góp phần hiện đại hóa cơ sở vật chất trường học.
+        </p>
+        <p>
+          Dự án đã được đánh giá cao về hiệu quả, chi phí và trải nghiệm người dùng, với tiềm năng mở rộng sang các trường khác trong hệ thống giáo dục.
+        </p>
+        <div class="section-link-right">
+          <a href="ve-chung-toi.html" class="section-link-btn"><i class="fas fa-arrow-right"></i> Sang trang Về chúng tôi</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-content">
+        Copyright 2026<br>
+        Website này là tài sản thuộc quyền sở hữu hợp pháp của SEB.<br>
+        Nội dung, hình ảnh và mã nguồn được bảo hộ theo quy định pháp luật hiện hành.<br>
+        Mọi thông tin chi tiết xin liên hệ<br>
+        Hotline: 0344655621
+      </div>
+      <div class="footer-tip">
+        <i class="far fa-lightbulb"></i>
+        Bạn có thể quét mã QR để mượn, trả và báo hỏng thiết bị nhanh chóng !
 </head>
 
 <body>
@@ -215,8 +410,9 @@ graph TD
   </div>
 
   <script src="../Javascript/Java.js"></script>
-    <script src="../Javascript/ui-improvements.js"></script>
-    <script src="../Javascript/auth.js"></script>
+  <script src="../Javascript/router.js"></script>
+  <script src="../Javascript/ui-improvements.js"></script>
+  <script src="../Javascript/auth.js"></script>
 </body>
 
 </html>

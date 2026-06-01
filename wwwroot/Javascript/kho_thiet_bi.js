@@ -254,16 +254,45 @@ async function resolveDeviceCatalog() {
         if (!response.ok) throw new Error('Cannot load devices');
         const data = await response.json();
         const devices = Array.isArray(data.devices) ? data.devices : [];
-        return devices.map(d => ({
-            id: d.code,
-            name: d.name,
-            category: d.categoryCode,
-            subject: d.subjectCode,
-            status: d.availableQuantity > 0 ? 'available' : 'unavailable',
-            quantity: d.totalQuantity,
-            availableQuantity: d.availableQuantity,
-            image: d.imageUrl ? `<img src="${d.imageUrl}" alt="${d.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:#94a3b8">Không có ảnh</div>'
-        }));
+        
+        let lookups = window.DEVICE_FILTERS_LOOKUPS;
+        if (!lookups) {
+            try {
+                const resp = await fetch((window.API_BASE_URL || '') + '/api/lookups/device-filters');
+                if (resp.ok) {
+                    lookups = await resp.json();
+                    window.DEVICE_FILTERS_LOOKUPS = lookups;
+                }
+            } catch (e) {
+                console.warn('Không tải được lookup bổ sung trong catalog resolver', e);
+            }
+        }
+
+        return devices.map(d => {
+            let categoryCode = d.category;
+            if (lookups && Array.isArray(lookups.categories)) {
+                const found = lookups.categories.find(c => c.label === d.category || c.value === d.category);
+                if (found) categoryCode = found.value;
+            }
+            
+            let subjectCode = d.subject;
+            if (lookups && Array.isArray(lookups.subjects)) {
+                const found = lookups.subjects.find(s => s.label === d.subject || s.value === d.subject);
+                if (found) subjectCode = found.value;
+            }
+
+            return {
+                id: d.id,
+                name: d.name,
+                category: categoryCode,
+                categoryLabel: d.category,
+                subject: subjectCode,
+                subjectLabel: d.subject,
+                status: d.status,
+                quantity: d.quantity,
+                image: d.imageUrl ? `<img src="${d.imageUrl}" alt="${d.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:#94a3b8">Không có ảnh</div>'
+            };
+        });
     } catch (e) {
         console.error('Lỗi khi tải thiết bị từ máy chủ:', e);
         return [];
@@ -505,7 +534,10 @@ window.renderBorrowHistorySidebar = function () {
         });
 };
 
-document.addEventListener('DOMContentLoaded', async () => {
+async function initDevicesPage() {
+    const grid = document.getElementById('equipment-grid');
+    if (!grid) return; // Exit if not on this page
+
     if (window.SEBAuth && typeof window.SEBAuth.restoreSessionFromServer === 'function') {
         await window.SEBAuth.restoreSessionFromServer();
     }
@@ -515,73 +547,88 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    const grid = document.getElementById('equipment-grid');
-    if (grid) {
-        renderSkeleton();
+    renderSkeleton();
 
+    try {
+        // Load lookups (categories + subjects) from API
         try {
-            // Load lookups (categories + subjects) from API
-            try {
-                const resp = await fetch((window.API_BASE_URL || '') + '/api/lookups/device-filters');
-                if (resp.ok) {
-                    const data = await resp.json();
-                    // categories -> render checkboxes
-                    const catContainer = document.getElementById('category-filters');
-                    if (catContainer && Array.isArray(data.categories)) {
-                        catContainer.innerHTML = data.categories.map(c => `\n                            <div class="filter-group kho-filter-group">\n                                <label class="kho-filter-label">\n                                    <input type="checkbox" class="filter-checkbox kho-filter-checkbox" value="${c.value}" data-type="category"> ${c.label}\n                                </label>\n                            </div>`).join('');
-                    }
-                    // subjects -> render checkboxes
-                    const subjContainer = document.getElementById('subject-filters');
-                    if (subjContainer && Array.isArray(data.subjects)) {
-                        subjContainer.innerHTML = data.subjects.map(s => `\n                            <div class="filter-group kho-filter-group">\n                                <label class="kho-filter-label">\n                                    <input type="checkbox" class="filter-checkbox kho-filter-checkbox" value="${s.value}" data-type="subject"> ${s.label}\n                                </label>\n                            </div>`).join('');
-                    }
+            const resp = await fetch((window.API_BASE_URL || '') + '/api/lookups/device-filters');
+            if (resp.ok) {
+                const data = await resp.json();
+                window.DEVICE_FILTERS_LOOKUPS = data;
+                // categories -> render checkboxes
+                const catContainer = document.getElementById('category-filters');
+                if (catContainer && Array.isArray(data.categories)) {
+                    catContainer.innerHTML = data.categories.map(c => `
+                        <div class="filter-group kho-filter-group">
+                            <label class="kho-filter-label">
+                                <input type="checkbox" class="filter-checkbox kho-filter-checkbox" value="${c.value}" data-type="category"> ${c.label}
+                            </label>
+                        </div>`).join('');
                 }
-            } catch (e) {
-                console.warn('Không thể tải lookup categories/subjects', e);
+                // subjects -> render checkboxes
+                const subjContainer = document.getElementById('subject-filters');
+                if (subjContainer && Array.isArray(data.subjects)) {
+                    subjContainer.innerHTML = data.subjects.map(s => `
+                        <div class="filter-group kho-filter-group">
+                            <label class="kho-filter-label">
+                                <input type="checkbox" class="filter-checkbox kho-filter-checkbox" value="${s.value}" data-type="subject"> ${s.label}
+                            </label>
+                        </div>`).join('');
+                }
             }
+        } catch (e) {
+            console.warn('Không thể tải lookup categories/subjects', e);
+        }
 
-            if (isPersonalPage) {
-                // Load personal devices from API
-                const username = (window.SEBAuth && window.SEBAuth.getUser ? window.SEBAuth.getUser() : '') || sessionStorage.getItem('seb.lastBorrowUser') || '';
-                if (!username) {
-                    allDevices = [];
-                } else {
-                    try {
-                        const resp = await fetch((window.API_BASE_URL || '') + `/api/me/favorites?username=${encodeURIComponent(username)}`);
-                        if (resp.ok) {
-                            const payload = await resp.json();
-                            allDevices = Array.isArray(payload.devices) ? payload.devices.map(d => ({
-                                id: d.id,
-                                name: d.name,
-                                category: d.category,
-                                subject: d.subject,
-                                status: 'available',
-                                quantity: d.quantity,
-                                image: d.imageUrl ? `<img src="${d.imageUrl}" alt="${d.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:#94a3b8">Không có ảnh</div>'
-                            })) : [];
-                        } else {
-                            allDevices = [];
-                        }
-                    } catch (e) {
-                        console.error('Không tải được kho cá nhân', e);
+        if (isPersonalPage) {
+            // Load personal devices from API
+            const username = (window.SEBAuth && window.SEBAuth.getUser ? window.SEBAuth.getUser() : '') || sessionStorage.getItem('seb.lastBorrowUser') || '';
+            if (!username) {
+                allDevices = [];
+            } else {
+                try {
+                    const resp = await fetch((window.API_BASE_URL || '') + `/api/me/favorites?username=${encodeURIComponent(username)}`);
+                    if (resp.ok) {
+                        const payload = await resp.json();
+                        allDevices = Array.isArray(payload.devices) ? payload.devices.map(d => ({
+                            id: d.id,
+                            name: d.name,
+                            category: d.category,
+                            subject: d.subject,
+                            status: 'available',
+                            quantity: d.quantity,
+                            image: d.imageUrl ? `<img src="${d.imageUrl}" alt="${d.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:#94a3b8">Không có ảnh</div>'
+                        })) : [];
+                    } else {
                         allDevices = [];
                     }
+                } catch (e) {
+                    console.error('Không tải được kho cá nhân', e);
+                    allDevices = [];
                 }
-                if (typeof window.renderBorrowHistorySidebar === 'function') {
-                    window.renderBorrowHistorySidebar();
-                }
-            } else {
-                allDevices = await resolveDeviceCatalog();
             }
-
-            applyFilters();
-            setupFilters();
-        } catch (err) {
-            console.error('Lỗi khi tải danh sách thiết bị:', err);
-            grid.innerHTML = '<div class="empty-state" style="border-color: #ef4444; color: #ef4444;"><h3>Lỗi tải dữ liệu</h3><p>Không tìm thấy dữ liệu thiết bị trong file JS.</p></div>';
+            if (typeof window.renderBorrowHistorySidebar === 'function') {
+                window.renderBorrowHistorySidebar();
+            }
+        } else {
+            allDevices = await resolveDeviceCatalog();
         }
+
+        applyFilters();
+        setupFilters();
+    } catch (err) {
+        console.error('Lỗi khi tải danh sách thiết bị:', err);
+        grid.innerHTML = '<div class="empty-state" style="border-color: #ef4444; color: #ef4444;"><h3>Lỗi tải dữ liệu</h3><p>Không tìm thấy dữ liệu thiết bị trong file JS.</p></div>';
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDevicesPage);
+} else {
+    initDevicesPage();
+}
+window.addEventListener('seb:page-loaded', initDevicesPage);
 
 // Hàm Bridge để tương tác chéo giúp mở Modal cho thiết bị
 window.openDeviceModalById = function (id) {

@@ -1,4 +1,7 @@
-document.addEventListener("DOMContentLoaded", () => {
+// Java.js
+// Quản lý các hiệu ứng động chung, cuộn trang (scroll reveal) và nút menu di động (hamburger)
+
+(function () {
     function initScrollReveal() {
         const revealTargets = document.querySelectorAll(".section-wrapper, .search-container, .stats-row, .footer");
         if (!revealTargets.length) {
@@ -28,47 +31,79 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
         revealTargets.forEach((element) => {
+            // Đảm bảo không trùng lặp class hiệu ứng
+            element.classList.remove("is-visible");
             element.classList.add("reveal-on-scroll");
             observer.observe(element);
         });
     }
 
-    initScrollReveal();
+    function initHamburger() {
+        const hamburgerBtn = document.getElementById("hamburgerBtn");
+        const navLinks = document.getElementById("navLinks");
 
-    initScrollReveal();
-    // --- HAMBURGER MENU LOGIC ---
-    // --- HAMBURGER MENU LOGIC ---
-    const hamburgerBtn = document.getElementById("hamburgerBtn");
-    const navLinks = document.getElementById("navLinks");
-
-    if (hamburgerBtn && navLinks) {
-        hamburgerBtn.addEventListener("click", (e) => {
-            e.stopPropagation(); // Prettify click bubbling issues
-            hamburgerBtn.classList.toggle("open");
-            navLinks.classList.toggle("open");
+        if (hamburgerBtn && navLinks && !hamburgerBtn.dataset.hasListener) {
+            hamburgerBtn.dataset.hasListener = "true";
             
-            // Cập nhật thuộc tính aria để hỗ trợ tiếp cận (accessibility)
-            const isOpen = hamburgerBtn.classList.contains("open");
-            hamburgerBtn.setAttribute("aria-expanded", isOpen);
-        });
-
-        // Đóng menu khi click vào một link (hữu ích cho Mobile)
-        const links = navLinks.querySelectorAll(".nav-tab");
-        links.forEach(link => {
-            link.addEventListener("click", () => {
-                hamburgerBtn.classList.remove("open");
-                navLinks.classList.remove("open");
-                hamburgerBtn.setAttribute("aria-expanded", "false");
+            hamburgerBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                hamburgerBtn.classList.toggle("open");
+                navLinks.classList.toggle("open");
+                
+                const isOpen = hamburgerBtn.classList.contains("open");
+                hamburgerBtn.setAttribute("aria-expanded", isOpen);
             });
-        });
 
-        // Đóng menu khi click ra ngoài
-        document.addEventListener("click", (e) => {
-            if (!hamburgerBtn.contains(e.target) && !navLinks.contains(e.target)) {
-                hamburgerBtn.classList.remove("open");
-                navLinks.classList.remove("open");
-                hamburgerBtn.setAttribute("aria-expanded", "false");
+            // Đóng menu khi click vào một link
+            const links = navLinks.querySelectorAll(".nav-tab");
+            links.forEach(link => {
+                link.addEventListener("click", () => {
+                    hamburgerBtn.classList.remove("open");
+                    navLinks.classList.remove("open");
+                    hamburgerBtn.setAttribute("aria-expanded", "false");
+                });
+            });
+
+            // Đóng menu khi click ra ngoài (chỉ đăng ký 1 lần duy nhất trên document)
+            if (!window.hasHamburgerClickOutListener) {
+                window.hasHamburgerClickOutListener = true;
+                document.addEventListener("click", (e) => {
+                    const curHamburgerBtn = document.getElementById("hamburgerBtn");
+                    const curNavLinks = document.getElementById("navLinks");
+                    if (curHamburgerBtn && curNavLinks) {
+                        if (!curHamburgerBtn.contains(e.target) && !curNavLinks.contains(e.target)) {
+                            curHamburgerBtn.classList.remove("open");
+                            curNavLinks.classList.remove("open");
+                            curHamburgerBtn.setAttribute("aria-expanded", "false");
+                        }
+                    }
+                });
             }
-        });
+        }
     }
-});
+
+    function initAll() {
+        initScrollReveal();
+        initHamburger();
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initAll);
+    } else {
+        initAll();
+    }
+
+    // Lắng nghe sự kiện tải trang động từ Router
+    window.addEventListener("seb:page-loaded", () => {
+        initScrollReveal();
+        
+        // Đóng menu di động nếu đang mở
+        const hamburgerBtn = document.getElementById("hamburgerBtn");
+        const navLinks = document.getElementById("navLinks");
+        if (hamburgerBtn && navLinks) {
+            hamburgerBtn.classList.remove("open");
+            navLinks.classList.remove("open");
+            hamburgerBtn.setAttribute("aria-expanded", "false");
+        }
+    });
+})();

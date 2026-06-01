@@ -1,7 +1,10 @@
 // wwwroot/Javascript/dang-ky-phong.js
 // Quản lý nghiệp vụ đặt phòng học, đồng bộ dữ liệu thời gian thực từ API
 
-document.addEventListener('DOMContentLoaded', async function () {
+async function initBookingPage() {
+    const slotButtons = document.querySelectorAll('.slot-btn');
+    if (slotButtons.length === 0) return; // Exit if not on this page
+
     // 1. Kiểm tra đăng nhập
     if (window.SEBAuth && typeof window.SEBAuth.requireAuth === 'function') {
         const loggedIn = window.SEBAuth.requireAuth({
@@ -357,4 +360,11 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (day === 0) return 7; // Chủ nhật (không hiển thị)
         return day + 1; // 1 (Thứ 2) -> 2, 2 (Thứ 3) -> 3... 5 (Thứ 6) -> 6
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initBookingPage);
+} else {
+    initBookingPage();
+}
+window.addEventListener('seb:page-loaded', initBookingPage);

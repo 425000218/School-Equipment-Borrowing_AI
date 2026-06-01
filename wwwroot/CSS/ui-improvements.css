@@ -233,3 +233,29 @@
     cursor: pointer;
     color: #6c757d;
 }
+
+/* 6. PJAX PAGE TRANSITIONS */
+.section-wrapper {
+    transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+    opacity: 1;
+    transform: translateY(0);
+}
+.section-wrapper.fade-out {
+    opacity: 0;
+    transform: translateY(8px);
+}
+.section-wrapper.fade-in {
+    animation: pjaxFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes pjaxFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+

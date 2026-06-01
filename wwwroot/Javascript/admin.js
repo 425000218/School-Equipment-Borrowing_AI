@@ -2,7 +2,10 @@
 
 let currentEditUser = null;
 
-document.addEventListener('DOMContentLoaded', async () => {
+async function initAdminPage() {
+    const tbody = document.getElementById('admin-users-tbody');
+    if (!tbody) return; // Exit if not on this page
+
     // 1. Auth check
     if (window.SEBAuth && !(await window.SEBAuth.restoreSessionFromServer())) {
         window.SEBAuth.goToLogin();
@@ -17,7 +20,45 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2. Initial load
     loadUsers();
-});
+
+    // Bind modal save button only once
+    const btnSaveUser = document.getElementById('btn-save-user');
+    if (btnSaveUser && !btnSaveUser.dataset.hasListener) {
+        btnSaveUser.dataset.hasListener = "true";
+        btnSaveUser.addEventListener('click', async () => {
+            if (!currentEditUser) return;
+            
+            const fullName = document.getElementById('um-fullname').value;
+            const role = document.getElementById('um-role').value;
+            const status = document.getElementById('um-status').value;
+            
+            try {
+                const resp = await fetch((window.API_BASE_URL || '') + `/api/admin/users/${encodeURIComponent(currentEditUser)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fullName, role, status, email: null, phone: null })
+                });
+                
+                if (resp.ok) {
+                    document.getElementById('userModal').style.display = 'none';
+                    loadUsers();
+                    if (window.showToast) window.showToast('Cập nhật thành công', 'success');
+                } else {
+                    alert('Lỗi cập nhật');
+                }
+            } catch(err) {
+                alert('Lỗi kết nối');
+            }
+        });
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAdminPage);
+} else {
+    initAdminPage();
+}
+window.addEventListener('seb:page-loaded', initAdminPage);
 
 function adminSwitchTab(tabName) {
     document.querySelectorAll('.admin-nav li').forEach(li => li.classList.remove('active'));
@@ -86,31 +127,7 @@ function openEditUser(username, fullName, role, status) {
     document.getElementById('userModal').style.display = 'grid';
 }
 
-document.getElementById('btn-save-user').addEventListener('click', async () => {
-    if (!currentEditUser) return;
-    
-    const fullName = document.getElementById('um-fullname').value;
-    const role = document.getElementById('um-role').value;
-    const status = document.getElementById('um-status').value;
-    
-    try {
-        const resp = await fetch((window.API_BASE_URL || '') + `/api/admin/users/${encodeURIComponent(currentEditUser)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fullName, role, status, email: null, phone: null })
-        });
-        
-        if (resp.ok) {
-            document.getElementById('userModal').style.display = 'none';
-            loadUsers();
-            if (window.showToast) window.showToast('Cập nhật thành công', 'success');
-        } else {
-            alert('Lỗi cập nhật');
-        }
-    } catch(err) {
-        alert('Lỗi kết nối');
-    }
-});
+// btn-save-user listener is now bound inside initAdminPage to prevent duplication
 
 async function deleteUser(username) {
     if (!confirm(`Bạn có chắc muốn xóa tài khoản ${username} không?`)) return;

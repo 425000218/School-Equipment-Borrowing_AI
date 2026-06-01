@@ -15,6 +15,14 @@
     <link rel="stylesheet" href="../CSS/kho.css">
     <link rel="stylesheet" href="../CSS/kho-pages.css">
     <link rel="stylesheet" href="../CSS/ui-improvements.css">
+    <meta name="view-transition" content="same-origin">
+    <script>
+        // Immediate Auth Check before DOM loads to prevent UI flash
+        if (!sessionStorage.getItem('seb.authUser') && !localStorage.getItem('seb.authUser')) {
+            document.documentElement.style.display = 'none';
+            window.location.href = '/Page/dang-nhap.html?redirect=' + encodeURIComponent(window.location.pathname);
+        }
+    </script>
 </head>
 
 <body>
@@ -162,6 +170,7 @@
     <script src="../Javascript/Java.js"></script>
     <script src="../Javascript/device_modal.js"></script>
     <script src="../Javascript/user_dashboard.js"></script>
+    <script src="../Javascript/router.js"></script>
 
     <script>
         (async function(){

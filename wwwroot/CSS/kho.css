@@ -15,6 +15,17 @@
     #app {
         grid-template-columns: 1fr;
     }
+    .sidebar {
+        width: 100% !important;
+        position: relative !important;
+        top: 0 !important;
+        min-height: auto !important;
+        box-shadow: none !important;
+        border-right: none !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        margin-bottom: 20px;
+        box-sizing: border-box;
+    }
 }
 
 .sidebar {

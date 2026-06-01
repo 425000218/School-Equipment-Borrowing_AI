@@ -255,7 +255,9 @@ window.openModal = function(device) {
 
     document.getElementById('modal-title').textContent = device.name;
     document.getElementById('modal-code').textContent = device.id;
-    document.getElementById('modal-category').textContent = device.category + (device.subject && device.subject !== 'Chung' ? ` - Môn ${device.subject}` : '');
+    const categoryDisplay = device.categoryLabel || device.category || 'Chung';
+    const subjectDisplay = device.subjectLabel || device.subject || '';
+    document.getElementById('modal-category').textContent = categoryDisplay + (subjectDisplay && subjectDisplay !== 'Chung' ? ` - Môn ${subjectDisplay}` : '');
     
     // Status color
     const statusEl = document.getElementById('modal-status');
