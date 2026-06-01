@@ -1568,6 +1568,203 @@ app.MapPost("/api/room-bookings/{bookingNo}/actions", async (
     }
 });
 
+});
+
+// --- API User Registration & Profile ---
+app.MapPost("/api/users/register", async (HttpContext httpContext, IConfiguration config, RegisterRequest body, CancellationToken ct) =>
+{
+    var connectionString = GetMssqlConnectionString(config);
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("Missing DB config");
+    if (string.IsNullOrWhiteSpace(body.Username) || string.IsNullOrWhiteSpace(body.Password) || string.IsNullOrWhiteSpace(body.FullName))
+        return Results.BadRequest(new { error = "invalid_payload" });
+
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+        await using var command = new SqlCommand("dbo.sp_Users_Register", connection) { CommandType = CommandType.StoredProcedure };
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = body.Username.Trim() });
+        command.Parameters.Add(new SqlParameter("@PasswordHash", SqlDbType.NVarChar, 255) { Value = ComputeSha256Hex(body.Password.Trim()) });
+        command.Parameters.Add(new SqlParameter("@FullName", SqlDbType.NVarChar, 150) { Value = body.FullName.Trim() });
+        command.Parameters.Add(new SqlParameter("@Email", SqlDbType.NVarChar, 255) { Value = string.IsNullOrWhiteSpace(body.Email) ? DBNull.Value : body.Email.Trim() });
+        command.Parameters.Add(new SqlParameter("@Phone", SqlDbType.NVarChar, 30) { Value = string.IsNullOrWhiteSpace(body.Phone) ? DBNull.Value : body.Phone.Trim() });
+        
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return Results.Problem("registration_failed");
+        return Results.Ok(new {
+            username = reader.GetString(reader.GetOrdinal("username")),
+            fullName = ReadNullableString(reader, "fullName"),
+            role = reader.GetString(reader.GetOrdinal("role")),
+            status = reader.GetString(reader.GetOrdinal("status"))
+        });
+    }
+    catch (SqlException ex) when (ex.Number == 50000) { return Results.BadRequest(new { error = ex.Message }); }
+});
+
+app.MapGet("/api/users/{username}/profile", async (HttpContext httpContext, IConfiguration config, string username, CancellationToken ct) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null || (authUser.Username != username && authUser.Role != "admin")) return Results.Unauthorized();
+    
+    var connectionString = GetMssqlConnectionString(config);
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync(ct);
+    await using var command = new SqlCommand("SELECT username, full_name, email, phone FROM dbo.users WHERE username = @Username", connection);
+    command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = username });
+    await using var reader = await command.ExecuteReaderAsync(ct);
+    if (!await reader.ReadAsync(ct)) return Results.NotFound();
+    
+    return Results.Ok(new {
+        username = reader.GetString(0),
+        fullName = ReadNullableString(reader, "full_name"),
+        email = ReadNullableString(reader, "email"),
+        phone = ReadNullableString(reader, "phone")
+    });
+});
+
+app.MapPut("/api/users/{username}/profile", async (HttpContext httpContext, IConfiguration config, string username, UpdateProfileRequest body, CancellationToken ct) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null || (authUser.Username != username && authUser.Role != "admin")) return Results.Unauthorized();
+    
+    var connectionString = GetMssqlConnectionString(config);
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+        await using var command = new SqlCommand("dbo.sp_Users_UpdateProfile", connection) { CommandType = CommandType.StoredProcedure };
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = username });
+        command.Parameters.Add(new SqlParameter("@FullName", SqlDbType.NVarChar, 150) { Value = body.FullName.Trim() });
+        command.Parameters.Add(new SqlParameter("@Email", SqlDbType.NVarChar, 255) { Value = string.IsNullOrWhiteSpace(body.Email) ? DBNull.Value : body.Email.Trim() });
+        command.Parameters.Add(new SqlParameter("@Phone", SqlDbType.NVarChar, 30) { Value = string.IsNullOrWhiteSpace(body.Phone) ? DBNull.Value : body.Phone.Trim() });
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return Results.Problem("update_failed");
+        return Results.Ok(new { success = true });
+    }
+    catch (SqlException ex) when (ex.Number == 50000) { return Results.BadRequest(new { error = ex.Message }); }
+});
+
+// --- API Admin CRUD ---
+app.MapGet("/api/admin/users", async (HttpContext httpContext, IConfiguration config, CancellationToken ct) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null || authUser.Role != "admin") return Results.Unauthorized();
+    var connectionString = GetMssqlConnectionString(config);
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync(ct);
+    await using var command = new SqlCommand("dbo.sp_Admin_Users_List", connection) { CommandType = CommandType.StoredProcedure };
+    await using var reader = await command.ExecuteReaderAsync(ct);
+    var users = new List<object>();
+    while (await reader.ReadAsync(ct))
+    {
+        users.Add(new {
+            username = reader.GetString(reader.GetOrdinal("username")),
+            fullName = ReadNullableString(reader, "fullName"),
+            email = ReadNullableString(reader, "email"),
+            phone = ReadNullableString(reader, "phone"),
+            role = reader.GetString(reader.GetOrdinal("role")),
+            status = reader.GetString(reader.GetOrdinal("status")),
+            createdAt = reader.GetDateTime(reader.GetOrdinal("createdAt"))
+        });
+    }
+    return Results.Ok(new { users });
+});
+
+app.MapPut("/api/admin/users/{username}", async (HttpContext httpContext, IConfiguration config, string username, AdminUserUpdateRequest body, CancellationToken ct) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null || authUser.Role != "admin") return Results.Unauthorized();
+    var connectionString = GetMssqlConnectionString(config);
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+        await using var command = new SqlCommand("dbo.sp_Admin_Users_Update", connection) { CommandType = CommandType.StoredProcedure };
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = username });
+        command.Parameters.Add(new SqlParameter("@FullName", SqlDbType.NVarChar, 150) { Value = body.FullName.Trim() });
+        command.Parameters.Add(new SqlParameter("@Email", SqlDbType.NVarChar, 255) { Value = string.IsNullOrWhiteSpace(body.Email) ? DBNull.Value : body.Email.Trim() });
+        command.Parameters.Add(new SqlParameter("@Phone", SqlDbType.NVarChar, 30) { Value = string.IsNullOrWhiteSpace(body.Phone) ? DBNull.Value : body.Phone.Trim() });
+        command.Parameters.Add(new SqlParameter("@Role", SqlDbType.NVarChar, 20) { Value = body.Role.Trim() });
+        command.Parameters.Add(new SqlParameter("@Status", SqlDbType.NVarChar, 20) { Value = body.Status.Trim() });
+        await command.ExecuteNonQueryAsync(ct);
+        return Results.Ok(new { success = true });
+    }
+    catch (SqlException ex) when (ex.Number == 50000) { return Results.BadRequest(new { error = ex.Message }); }
+});
+
+app.MapDelete("/api/admin/users/{username}", async (HttpContext httpContext, IConfiguration config, string username, CancellationToken ct) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null || authUser.Role != "admin") return Results.Unauthorized();
+    var connectionString = GetMssqlConnectionString(config);
+    try
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+        await using var command = new SqlCommand("dbo.sp_Admin_Users_Delete", connection) { CommandType = CommandType.StoredProcedure };
+        command.Parameters.Add(new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = username });
+        await command.ExecuteNonQueryAsync(ct);
+        return Results.Ok(new { success = true });
+    }
+    catch (SqlException ex) when (ex.Number == 50000) { return Results.BadRequest(new { error = ex.Message }); }
+});
+
+app.MapGet("/api/admin/borrow-requests", async (HttpContext httpContext, IConfiguration config, CancellationToken ct) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null || authUser.Role != "admin") return Results.Unauthorized();
+    var connectionString = GetMssqlConnectionString(config);
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync(ct);
+    await using var command = new SqlCommand("dbo.sp_Admin_BorrowRequests_List", connection) { CommandType = CommandType.StoredProcedure };
+    await using var reader = await command.ExecuteReaderAsync(ct);
+    var requests = new List<object>();
+    while (await reader.ReadAsync(ct))
+    {
+        requests.Add(new {
+            id = reader.GetInt32(reader.GetOrdinal("id")),
+            requestNo = reader.GetString(reader.GetOrdinal("requestNo")),
+            requesterUsername = reader.GetString(reader.GetOrdinal("requesterUsername")),
+            requesterFullName = ReadNullableString(reader, "requesterFullName"),
+            deviceCode = reader.GetString(reader.GetOrdinal("deviceCode")),
+            status = reader.GetString(reader.GetOrdinal("status")),
+            createdAt = reader.GetDateTime(reader.GetOrdinal("createdAt")),
+            device = new {
+                name = ReadNullableString(reader, "deviceName"),
+                imageUrl = ReadNullableString(reader, "deviceImageUrl"),
+                quantity = reader.GetInt32(reader.GetOrdinal("quantity"))
+            }
+        });
+    }
+    return Results.Ok(new { requests });
+});
+
+app.MapGet("/api/admin/room-bookings", async (HttpContext httpContext, IConfiguration config, CancellationToken ct) =>
+{
+    var authUser = ReadAuthUser(httpContext, config);
+    if (authUser is null || authUser.Role != "admin") return Results.Unauthorized();
+    var connectionString = GetMssqlConnectionString(config);
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync(ct);
+    await using var command = new SqlCommand("dbo.sp_Admin_RoomBookings_List", connection) { CommandType = CommandType.StoredProcedure };
+    await using var reader = await command.ExecuteReaderAsync(ct);
+    var bookings = new List<object>();
+    while (await reader.ReadAsync(ct))
+    {
+        bookings.Add(new {
+            bookingNo = reader.GetString(reader.GetOrdinal("bookingNo")),
+            requesterUsername = reader.GetString(reader.GetOrdinal("requesterUsername")),
+            requesterFullName = ReadNullableString(reader, "requesterFullName"),
+            roomCode = reader.GetString(reader.GetOrdinal("roomCode")),
+            roomName = ReadNullableString(reader, "roomName"),
+            bookingDate = reader.GetDateTime(reader.GetOrdinal("bookingDate")),
+            slot = reader.GetString(reader.GetOrdinal("slot")),
+            status = reader.GetString(reader.GetOrdinal("status"))
+        });
+    }
+    return Results.Ok(new { bookings });
+});
+
 app.Run();
 
 record LookupOption(string value, string label);
@@ -1575,6 +1772,11 @@ record LoginRequest(string Username, string Password, bool Remember);
 record AuthUser(string Username, string Role, DateTimeOffset ExpiresAtUtc);
 record LoginFailureResult(bool IsLocked, int RetryAfterSeconds, int CurrentFailedCount);
 record ClearLockoutRequest(string? Username, bool ClearAll);
+
+// --- New Records for Users/Admin ---
+record RegisterRequest(string Username, string Password, string FullName, string? Email, string? Phone);
+record UpdateProfileRequest(string FullName, string? Email, string? Phone);
+record AdminUserUpdateRequest(string FullName, string? Email, string? Phone, string Role, string Status);
 
 sealed class LoginThrottleState
 {

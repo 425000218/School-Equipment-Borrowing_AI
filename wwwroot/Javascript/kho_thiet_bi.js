@@ -249,18 +249,25 @@ function setupFilters() {
 }
 
 async function resolveDeviceCatalog() {
-    if (window.DEVICES_DATA_PROMISE && typeof window.DEVICES_DATA_PROMISE.then === 'function') {
-        const devices = await window.DEVICES_DATA_PROMISE;
-        if (Array.isArray(devices)) {
-            return devices;
-        }
+    try {
+        const response = await fetch((window.API_BASE_URL || '') + '/api/devices');
+        if (!response.ok) throw new Error('Cannot load devices');
+        const data = await response.json();
+        const devices = Array.isArray(data.devices) ? data.devices : [];
+        return devices.map(d => ({
+            id: d.code,
+            name: d.name,
+            category: d.categoryCode,
+            subject: d.subjectCode,
+            status: d.availableQuantity > 0 ? 'available' : 'unavailable',
+            quantity: d.totalQuantity,
+            availableQuantity: d.availableQuantity,
+            image: d.imageUrl ? `<img src="${d.imageUrl}" alt="${d.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:#94a3b8">Không có ảnh</div>'
+        }));
+    } catch (e) {
+        console.error('Lỗi khi tải thiết bị từ máy chủ:', e);
+        return [];
     }
-
-    if (Array.isArray(window.DEVICES_DATA)) {
-        return window.DEVICES_DATA;
-    }
-
-    return [];
 }
 
 function applyFilters() {

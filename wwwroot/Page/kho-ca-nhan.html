@@ -72,6 +72,33 @@
 
                 <main class="content">
                     <h1>Kho Cá Nhân</h1>
+
+                    <!-- Cập nhật hồ sơ -->
+                    <div class="profile-edit-box" style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin-bottom:24px;">
+                        <h3 style="margin-top:0; color:#0f172a; margin-bottom:16px;">Thông tin tài khoản</h3>
+                        <form id="profile-form">
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px;">
+                                <div>
+                                    <label style="display:block; font-weight:600; margin-bottom:4px; font-size:0.9rem;">Họ và tên</label>
+                                    <input type="text" id="prof-fullname" required style="width:100%; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                                </div>
+                                <div>
+                                    <label style="display:block; font-weight:600; margin-bottom:4px; font-size:0.9rem;">Tên đăng nhập</label>
+                                    <input type="text" id="prof-username" disabled style="width:100%; padding:8px 12px; border:1px solid #e2e8f0; background:#f8fafc; border-radius:6px; box-sizing:border-box;">
+                                </div>
+                                <div>
+                                    <label style="display:block; font-weight:600; margin-bottom:4px; font-size:0.9rem;">Email</label>
+                                    <input type="email" id="prof-email" style="width:100%; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                                </div>
+                                <div>
+                                    <label style="display:block; font-weight:600; margin-bottom:4px; font-size:0.9rem;">Số điện thoại</label>
+                                    <input type="text" id="prof-phone" style="width:100%; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn" id="btn-update-profile" style="background:#0ea5e9; color:#fff; border:none; padding:8px 16px; border-radius:6px; font-weight:600; cursor:pointer;">Cập nhật hồ sơ</button>
+                        </form>
+                    </div>
+
                     <div class="search-bar kho-select-wrap">
                         <select id="filter-category" class="kho-select">
                             <option value="">Tất cả danh mục</option>
@@ -216,10 +243,62 @@
                 if (typeof window.renderBorrowHistorySidebar === 'function') {
                     window.renderBorrowHistorySidebar();
                 }
+
+                // --- PROFILE LOGIC ---
+                const authUserStr = window.SEBAuth && window.SEBAuth.getUser ? window.SEBAuth.getUser() : '';
+                if (authUserStr) {
+                    try {
+                        const profResp = await fetch((window.API_BASE_URL || '') + `/api/users/${encodeURIComponent(authUserStr)}/profile`);
+                        if (profResp.ok) {
+                            const pData = await profResp.json();
+                            document.getElementById('prof-username').value = pData.username || '';
+                            document.getElementById('prof-fullname').value = pData.fullName || '';
+                            document.getElementById('prof-email').value = pData.email || '';
+                            document.getElementById('prof-phone').value = pData.phone || '';
+                        }
+                    } catch(err) { console.warn('Failed to load profile', err); }
+
+                    const profForm = document.getElementById('profile-form');
+                    if (profForm) {
+                        profForm.addEventListener('submit', async (e) => {
+                            e.preventDefault();
+                            const btn = document.getElementById('btn-update-profile');
+                            btn.disabled = true;
+                            btn.textContent = 'Đang lưu...';
+                            
+                            const payload = {
+                                FullName: document.getElementById('prof-fullname').value.trim(),
+                                Email: document.getElementById('prof-email').value.trim(),
+                                Phone: document.getElementById('prof-phone').value.trim()
+                            };
+
+                            try {
+                                const saveResp = await fetch((window.API_BASE_URL || '') + `/api/users/${encodeURIComponent(authUserStr)}/profile`, {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(payload)
+                                });
+                                if (saveResp.ok) {
+                                    window.alert('Cập nhật hồ sơ thành công!');
+                                    // Refresh session display if name changed
+                                    if (window.SEBAuth && window.SEBAuth.restoreSessionFromServer) {
+                                        await window.SEBAuth.restoreSessionFromServer();
+                                    }
+                                } else {
+                                    const err = await saveResp.json();
+                                    window.alert('Lỗi cập nhật: ' + (err.error || 'Server error'));
+                                }
+                            } catch(err) {
+                                window.alert('Lỗi kết nối tới máy chủ.');
+                            } finally {
+                                btn.disabled = false;
+                                btn.textContent = 'Cập nhật hồ sơ';
+                            }
+                        });
+                    }
+                }
             }catch(e){console.warn(e)}
         })();
     </script>
-
 </body>
-
 </html>

@@ -263,17 +263,43 @@
 
         let statusChip = headerRight.querySelector('.seb-auth-status');
         if (!statusChip) {
-            statusChip = document.createElement('a');
+            statusChip = document.createElement('div');
             statusChip.className = 'seb-auth-status';
+            statusChip.style.fontSize = '0.8rem';
+            statusChip.style.padding = '4px 8px';
+            statusChip.style.borderRadius = '12px';
+            statusChip.style.marginLeft = '8px';
+            statusChip.style.fontWeight = '600';
             headerRight.appendChild(statusChip);
         }
 
-        statusChip.href = loggedIn ? PROFILE_PATH : LOGIN_PATH;
-        statusChip.textContent = loggedIn
-            ? `${fullName || user} • ${role}`
-            : 'Chưa đăng nhập';
-        statusChip.setAttribute('aria-label', loggedIn ? `Tài khoản ${fullName || user}` : 'Chưa đăng nhập');
-        statusChip.dataset.state = loggedIn ? 'logged-in' : 'logged-out';
+        if (loggedIn) {
+            statusChip.style.display = 'block';
+            statusChip.style.backgroundColor = role === 'admin' ? '#fef08a' : '#dcfce7';
+            statusChip.style.color = role === 'admin' ? '#854d0e' : '#166534';
+            statusChip.textContent = role === 'admin' ? 'QTV' : 'GV';
+        } else {
+            statusChip.style.display = 'none';
+        }
+
+        // Inject Admin Navigation Link
+        const navLinks = document.getElementById('navLinks');
+        if (navLinks) {
+            let adminTab = navLinks.querySelector('.admin-nav-tab');
+            if (loggedIn && role === 'admin') {
+                if (!adminTab) {
+                    adminTab = document.createElement('a');
+                    adminTab.href = '/Page/admin.html';
+                    adminTab.className = 'nav-tab admin-nav-tab';
+                    adminTab.style.color = '#e11d48';
+                    adminTab.style.fontWeight = 'bold';
+                    adminTab.innerHTML = '<i class="fas fa-user-shield"></i> Trang quản trị';
+                    navLinks.appendChild(adminTab);
+                }
+            } else {
+                if (adminTab) adminTab.remove();
+            }
+        }
     }
 
     function redirectAfterLogin(defaultPath) {
