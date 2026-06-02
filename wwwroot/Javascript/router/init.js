@@ -27,9 +27,9 @@ export const pageInitMap = {
             .catch(err => console.error('Lỗi nạp module phòng học:', err));
     },
     // add other pages here
-    '/Page/dang-ky-phong-hoc.html': () => {
-        if (typeof window.initBookingPage === 'function') {
-            window.initBookingPage();
+    '/Page/kho-ca-nhan.html': () => {
+        if (typeof loadUserProfile === 'function') {
+            loadUserProfile();
         }
     },
     // add other pages here
