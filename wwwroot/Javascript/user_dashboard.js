@@ -39,15 +39,17 @@ function loadUserProfile() {
     const user = window.SEBAuth.getUser();
     if (!user) return;
     
-    document.getElementById('prof-username').value = user.username || '';
-    document.getElementById('prof-fullname').value = user.fullName || '';
-    
+    // Populate profile fields safely with fallbacks
+    const username = user.username || '';
+    const fullName = user.fullName || user.fullname || username;
+    const role = user.role || '';
+    document.getElementById('prof-username').value = username;
+    document.getElementById('prof-fullname').value = fullName;
     const sidebarName = document.getElementById('sidebar-fullname');
     const sidebarRole = document.getElementById('sidebar-role');
-    if (sidebarName) sidebarName.innerText = user.fullName || user.username;
-    if (sidebarRole) sidebarRole.innerText = (user.role === 'admin' ? 'Quản trị viên' : 'Giáo viên');
-    
-    // email and phone can be fetched from a /profile API if it returns them
+    if (sidebarName) sidebarName.innerText = fullName || username || 'Giáo viên';
+    if (sidebarRole) sidebarRole.innerText = (role.toLowerCase() === 'admin' ? 'Quản trị viên' : (role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Giáo viên'));
+
 }
 
 function getStatusBadge(status) {

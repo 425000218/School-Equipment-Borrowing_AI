@@ -7,20 +7,20 @@
   max-width: 1200px;
   margin: 0 auto;
 }
-    display: grid;
-    grid-template-columns: 250px 1fr;
-    gap: 20px;
-    padding: 20px;
-    min-height: 80vh;
-    max-width: 1200px;
-    margin: 0 auto;
+
+  padding: 20px;
+  min-height: 80vh;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
 }
 
 @media (max-width: 992px) {
     /* Removed grid-template-columns for responsive layout */
         grid-template-columns: 1fr;
     }
-    .sidebar {
+    
         /* width handled by Bootstrap columns */
         position: relative !important;
         top: 0 !important;
@@ -79,45 +79,7 @@
   font-weight: 600;
 }
 
-  width: 250px;
-  background-color: #ffffff;
-  padding: 20px;
-  border-right: 1px solid var(--card-border);
-  flex-shrink: 0;
-  min-height: calc(100vh - 200px);
-  position: sticky;
-  top: 20px;
-  align-self: flex-start;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-}
 
-.sidebar h3 {
-    margin-top: 0;
-    font-size: 1.2rem;
-    color: #333;
-    border-bottom: 2px solid #e9ecef;
-    padding-bottom: 10px;
-    margin-bottom: 15px;
-}
-
-.sidebar ul {
-    list-style-type: none;
-    padding: 0;
-    margin: 0;
-}
-
-.sidebar li {
-    padding: 10px 0;
-    border-bottom: 1px solid #f1f3f5;
-    cursor: pointer;
-    color: #555;
-    transition: color 0.2s;
-}
-
-.sidebar li:hover {
-    color: #4CAF50;
-}
 
 .content {
     background-color: #ffffff;
