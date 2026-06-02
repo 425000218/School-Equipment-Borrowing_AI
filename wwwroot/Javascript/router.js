@@ -24,8 +24,25 @@
         });
     }
 
+    // Cleanup old jQuery event handlers and stale HTML before loading a new page
+    function cleanupOldPage() {
+        if (window.jQuery) {
+            // Remove all delegated events to prevent duplicate handlers
+            $(window).off();
+            $(document).off();
+        }
+        // Clear the existing section-wrapper content to avoid leftover markup
+        const oldWrapper = document.querySelector('.section-wrapper');
+        if (oldWrapper) {
+            oldWrapper.innerHTML = '';
+        }
+    }
+
     async function loadPage(url, pushState = true) {
         try {
+            // Ensure previous page's events and markup are fully cleaned up
+            cleanupOldPage();
+
             const currentWrapper = document.querySelector('.section-wrapper');
             if (currentWrapper) {
                 currentWrapper.classList.add('fade-out');
@@ -45,7 +62,7 @@
 
             // 1. Kiểm tra xác thực ngay trước khi vẽ DOM mới (để tránh chớp trắng lộ giao diện)
             const targetHead = doc.querySelector('head');
-            
+
             // Nạp động các stylesheet mới từ trang đích vào <head> hiện tại để tránh lỗi mất CSS
             if (targetHead) {
                 const targetStylesheets = targetHead.querySelectorAll('link[rel="stylesheet"]');
@@ -54,7 +71,7 @@
                     if (linkHref) {
                         // Phân giải URL tương đối của stylesheet so với URL trang đích
                         const resolvedHref = new URL(linkHref, new URL(url, window.location.origin)).href;
-                        
+
                         // Kiểm tra xem stylesheet này đã tồn tại trong head chưa
                         const exists = Array.from(document.querySelectorAll('head link[rel="stylesheet"]')).some(el => el.href === resolvedHref);
                         if (!exists) {
@@ -116,7 +133,7 @@
                     const newConfigScript = document.createElement('script');
                     newConfigScript.src = '/Javascript/config.js?v=' + Date.now(); // cache-buster when reloading
                     newConfigScript.onload = () => {
-                        try { window.__configLoadedAtHost = window.location.hostname; } catch(e) {}
+                        try { window.__configLoadedAtHost = window.location.hostname; } catch (e) { }
                         resolve();
                     };
                     newConfigScript.onerror = () => resolve(); // continue even if config fails
