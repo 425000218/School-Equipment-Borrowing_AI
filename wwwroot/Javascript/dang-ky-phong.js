@@ -386,9 +386,14 @@ async function initBookingPage() {
     }
 }
 
+// Ensure the init function is accessible globally
+window.initBookingPage = initBookingPage;
+
+// Preserve existing DOMContentLoaded handling for direct page loads
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initBookingPage);
 } else {
     initBookingPage();
 }
+// Also respond to custom PJAX page‑loaded events
 window.addEventListener('seb:page-loaded', initBookingPage);
