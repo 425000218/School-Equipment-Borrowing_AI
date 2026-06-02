@@ -29,6 +29,51 @@
 }
 
 .sidebar {
+  width: 100%;
+  max-width: 250px;
+  background-color: #ffffff;
+  padding: 20px;
+  border-right: 1px solid var(--card-border);
+  box-sizing: border-box;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  position: static;
+  top: auto;
+}
+
+.sidebar h3 {
+  margin-top: 0;
+  font-size: 1.2rem;
+  color: #333;
+  border-bottom: 2px solid #e9ecef;
+  padding-bottom: 10px;
+  margin-bottom: 15px;
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar li {
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f3f5;
+  cursor: pointer;
+  color: #555;
+  transition: color 0.2s;
+}
+
+.sidebar li:hover {
+  color: #4CAF50;
+}
+
+.sidebar a {
+  text-decoration: none;
+  color: inherit;
+  font-weight: 600;
+}
+
   width: 250px;
   background-color: #ffffff;
   padding: 20px;
