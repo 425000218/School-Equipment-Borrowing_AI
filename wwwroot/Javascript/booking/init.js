@@ -2,7 +2,7 @@
 // Entry point for the booking page. Sets up UI, loads data, and binds events.
 
 import { fetchBookings } from './api.js';
-import { updateWeekHeaders, bindSlotButtons, bindNavigation, bindSubmit, getSelectedSlots, renderBookingList, applyBookingsToUI } from './ui.js';
+import { updateWeekHeaders, bindSlotButtons, bindNavigation, bindSubmit, getSelectedSlots, renderBookingList, applyBookingsToUI, initLookups } from './ui.js';
 import { getMonday, formatYMD, formatDM, getColumnDateStr } from './helpers.js';
 
 export async function initBookingPage() {
@@ -33,7 +33,7 @@ export async function initBookingPage() {
     bindSubmit(submitBtn, getSelectedSlots, roomNumberSelect, teacherSelect, purposeTextarea, loadBookings, currentMonday);
 
     // Load dropdowns then initial bookings
-    await loadLookups(roomTypeSelect, roomNumberSelect, teacherSelect);
+    initLookups(roomTypeSelect, roomNumberSelect, teacherSelect);
     await loadBookings();
 
     async function loadBookings() {
