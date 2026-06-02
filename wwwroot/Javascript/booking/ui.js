@@ -58,6 +58,10 @@ export function bindNavigation(prevWeekBtn, nextWeekBtn, bookingDateInput, curre
         bookingDateInput.addEventListener('change', () => {
             if (!bookingDateInput.value) return;
             currentMonday.setDate(new Date(bookingDateInput.value).getDate());
+            const newDate = new Date(bookingDateInput.value);
+            currentMonday.setDate(newDate.getDate());
+            currentMonday.setMonth(newDate.getMonth());
+            currentMonday.setFullYear(newDate.getFullYear());
             updateHeaders();
             fetchBookings();
         });
@@ -112,4 +116,30 @@ export function getSelectedSlots() {
     return Array.from(document.querySelectorAll('.slot-btn.selected'));
 }
 
-// Note: formatYMD, formatDM, getColumnDateStr, postBooking are imported from other modules where needed.
+export function renderBookingList(container, bookings) {
+    if (!container) return;
+    container.innerHTML = '';
+    if (!bookings || bookings.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.color = '#64748b';
+        empty.style.fontSize = '0.95rem';
+        empty.style.textAlign = 'center';
+        empty.style.padding = '10px';
+        empty.textContent = 'Chưa có dữ liệu phòng được chọn';
+        container.appendChild(empty);
+        return;
+    }
+    bookings.forEach(b => {
+        const item = document.createElement('div');
+        item.style.padding = '8px';
+        item.style.borderBottom = '1px solid #e2e8f0';
+        const dateStr = b.bookingDate || '';
+        const slotStr = b.slot || '';
+        const room = b.roomCode || '';
+        const purpose = b.purpose || '';
+        const teacher = b.teacher || '';
+        item.innerHTML = `<strong>Phòng ${room}</strong> - ${dateStr} - ${slotStr}<br/>Mục đích: ${purpose}<br/>Giáo viên: ${teacher}`;
+        container.appendChild(item);
+    });
+}
+
