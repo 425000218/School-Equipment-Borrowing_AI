@@ -252,6 +252,7 @@ window.openModal = function(device) {
     }
 
     initDeviceModal(); // Lazy load UI only when needed
+    window.currentModalDevice = device;
 
     document.getElementById('modal-title').textContent = device.name;
     document.getElementById('modal-code').textContent = device.id;
@@ -283,7 +284,7 @@ window.openModal = function(device) {
     
     const submitBtn = document.getElementById('modal-btn-submit');
     submitBtn.disabled = !isAvail;
-    submitBtn.textContent = isAvail ? 'Tạo phiếu mượn ngay' : 'Hàng chưa về kho';
+    submitBtn.textContent = isAvail ? 'Lập phiếu mượn ngay' : 'Hàng chưa về kho';
     submitBtn.setAttribute('data-device-id', device.id);
 
     // Kích hoạt bật hiển thị Modal
@@ -307,7 +308,7 @@ window.submitModalBorrow = async function() {
         return;
     }
 
-    const deviceId = document.getElementById('modal-btn-submit').getAttribute('data-device-id');
+    const deviceId = document.getElementById('modal-btn-submit').getAttribute('data-device-id') || window.currentModalDevice?.id;
     const qty = document.getElementById('modal-qty').value;
     const date = document.getElementById('modal-date').value;
     const requesterUsername = (window.SEBAuth && window.SEBAuth.getUser ? window.SEBAuth.getUser() : '')

@@ -1,7 +1,7 @@
 // booking/init.js
 // Entry point for the booking page. Sets up UI, loads data, and binds events.
 
-import { loadLookups, fetchBookings, postBooking } from './api.js';
+import { fetchBookings } from './api.js';
 import { updateWeekHeaders, bindSlotButtons, bindNavigation, bindSubmit, getSelectedSlots, renderBookingList, applyBookingsToUI } from './ui.js';
 import { getMonday, formatYMD, formatDM, getColumnDateStr } from './helpers.js';
 

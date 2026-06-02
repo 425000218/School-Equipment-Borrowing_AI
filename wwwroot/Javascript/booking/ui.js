@@ -1,7 +1,72 @@
 // booking/ui.js
 import { formatDM, formatYMD, getColumnDateStr } from './helpers.js';
 import { postBooking } from './api.js';
-// UI handling for the booking page – event binding, week header updates, slot selection, and rendering.
+
+/** UI handling for the booking page – event binding, week header updates, slot selection, rendering, and lookups. */
+
+// Initialize dropdowns (room type, room number, teacher)
+export function initLookups(roomTypeSelect, roomNumberSelect, teacherSelect) {
+    // Static data (could be fetched via API)
+    const roomTypes = ['Lý thuyết', 'Thực hành'];
+    const roomsByType = {
+        'Lý thuyết': ['101', '102', '103'],
+        'Thực hành': ['201', '202', '203']
+    };
+    const teachers = ['GV. Nguyễn Văn A', 'GV. Trần Thị B', 'GV. Lê C'];
+
+    // Populate room type select
+    if (roomTypeSelect) {
+        roomTypeSelect.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.disabled = true;
+        placeholder.selected = true;
+        placeholder.textContent = 'Loại phòng';
+        roomTypeSelect.appendChild(placeholder);
+        roomTypes.forEach(type => {
+            const opt = document.createElement('option');
+            opt.value = type;
+            opt.textContent = type;
+            roomTypeSelect.appendChild(opt);
+        });
+        // When type changes, update room numbers
+        roomTypeSelect.addEventListener('change', () => {
+            const selected = roomTypeSelect.value;
+            const numbers = roomsByType[selected] || [];
+            if (roomNumberSelect) {
+                roomNumberSelect.innerHTML = '';
+                const ph = document.createElement('option');
+                ph.value = '';
+                ph.disabled = true;
+                ph.selected = true;
+                ph.textContent = 'Số phòng';
+                roomNumberSelect.appendChild(ph);
+                numbers.forEach(num => {
+                    const o = document.createElement('option');
+                    o.value = num;
+                    o.textContent = num;
+                    roomNumberSelect.appendChild(o);
+                });
+            }
+        });
+    }
+    // Teacher select
+    if (teacherSelect) {
+        teacherSelect.innerHTML = '';
+        const ph = document.createElement('option');
+        ph.value = '';
+        ph.disabled = true;
+        ph.selected = true;
+        ph.textContent = 'Giáo viên';
+        teacherSelect.appendChild(ph);
+        teachers.forEach(t => {
+            const o = document.createElement('option');
+            o.value = t;
+            o.textContent = t;
+            teacherSelect.appendChild(o);
+        });
+    }
+}
 
 export function updateWeekHeaders(currentMonday, currentWeekLabel) {
     const friday = new Date(currentMonday);
@@ -57,7 +122,6 @@ export function bindNavigation(prevWeekBtn, nextWeekBtn, bookingDateInput, curre
     if (bookingDateInput) {
         bookingDateInput.addEventListener('change', () => {
             if (!bookingDateInput.value) return;
-            currentMonday.setDate(new Date(bookingDateInput.value).getDate());
             const newDate = new Date(bookingDateInput.value);
             currentMonday.setDate(newDate.getDate());
             currentMonday.setMonth(newDate.getMonth());
@@ -87,7 +151,7 @@ export function bindSubmit(submitBtn, getSelectedSlots, roomNumberSelect, teache
             const slot = slotBtn.getAttribute('data-slot');
             const bookingDate = getColumnDateStr(currentMonday, dayIndex);
             try {
-                const response = await postBooking(roomCode, bookingDate, slot, purpose, teacher);
+                const response = await postBooking(roomCode, bookingDate, slot, purpose);
                 if (response.ok) {
                     successCount++;
                 } else {
@@ -111,7 +175,6 @@ export function bindSubmit(submitBtn, getSelectedSlots, roomNumberSelect, teache
     });
 }
 
-// Helper to collect selected slot elements
 export function getSelectedSlots() {
     return Array.from(document.querySelectorAll('.slot-btn.selected'));
 }
@@ -138,14 +201,12 @@ export function renderBookingList(container, bookings) {
         const room = b.roomCode || '';
         const purpose = b.purpose || '';
         const teacher = b.teacher || '';
-        item.innerHTML = `<strong>Phòng ${room}</strong> - ${dateStr} - ${slotStr}<br/>Mục đích: ${purpose}<br/>Người đăng ký: ${teacher}`;
+        item.innerHTML = `<strong>Phòng ${room}</strong> - ${dateStr} - ${slotStr}<br/>Mục đích: ${purpose}<br/>Giáo viên: ${teacher}`;
         container.appendChild(item);
     });
 }
 
-// Apply booked slots to the timetable UI and lock them
 export function applyBookingsToUI(bookings, currentMonday) {
-    // Clear previous busy states
     const slotButtons = document.querySelectorAll('.slot-btn');
     slotButtons.forEach(btn => {
         if (btn.classList.contains('busy')) {
@@ -153,29 +214,23 @@ export function applyBookingsToUI(bookings, currentMonday) {
             btn.style.backgroundColor = '';
             btn.innerText = 'Trống';
         }
-        // Also clear any previous selection state
         if (btn.classList.contains('selected')) {
             btn.classList.remove('selected');
             btn.style.backgroundColor = '';
             btn.innerText = 'Trống';
         }
     });
-
-    // Apply new bookings
     bookings.forEach(b => {
         if (!b.bookingDate || !b.slot) return;
         const bookingDate = new Date(b.bookingDate);
-        // Compute day index relative to the currentMonday (Tue=2 .. Sat=6)
         const diffDays = Math.floor((bookingDate - currentMonday) / (1000 * 60 * 60 * 24));
-        const dayIndex = diffDays + 2; // Monday is base, Tuesday should be 2
+        const dayIndex = diffDays + 2;
         const selector = `.slot-btn[data-day-index="${dayIndex}"][data-slot="${b.slot}"]`;
         const btn = document.querySelector(selector);
         if (btn) {
             btn.classList.add('busy');
-            btn.style.backgroundColor = '#ef4444'; // red to indicate booked
+            btn.style.backgroundColor = '#ef4444';
             btn.innerText = 'Đã đặt';
         }
     });
 }
-
-
