@@ -24,17 +24,29 @@
         });
     }
 
-    // Cleanup old jQuery event handlers and stale HTML before loading a new page
+    // -------------------------------------------------------
+    // 1️⃣ Global clean‑up before loading a new PJAX page
+    // -------------------------------------------------------
     function cleanupOldPage() {
+        // Remove all delegated jQuery events (prevent duplicate handlers)
         if (window.jQuery) {
-            // Remove all delegated events to prevent duplicate handlers
             $(window).off();
             $(document).off();
         }
-        // Clear the existing section-wrapper content to avoid leftover markup
-        const oldWrapper = document.querySelector('.section-wrapper');
-        if (oldWrapper) {
-            oldWrapper.innerHTML = '';
+
+        // ② Remove any UI elements that were injected outside .section-wrapper
+        //    – typical candidates: modals, tooltips, overlay divs, toast containers
+        const leftovers = document.querySelectorAll('.modal, .tooltip, .overlay, .toast, .p-ajax-temp');
+        leftovers.forEach(node => node.remove());
+
+        // ③ Remove previously injected PJAX scripts (marked with data‑pjax)
+        document.querySelectorAll('script[data-pjax="true"]').forEach(s => s.remove());
+
+        // ④ Completely clear the main content container (not just its children)
+        const mainWrapper = document.querySelector('.section-wrapper');
+        if (mainWrapper) {
+            mainWrapper.innerHTML = '';
+            mainWrapper.classList.remove('fade-out', 'fade-in');
         }
     }
 
@@ -100,13 +112,20 @@
                 }
             }
 
-            // 2. Thay thế section-wrapper
-            const newWrapper = doc.querySelector('.section-wrapper');
-            const activeWrapper = document.querySelector('.section-wrapper');
-
-            if (newWrapper && activeWrapper) {
-                newWrapper.classList.add('fade-in');
-                activeWrapper.parentNode.replaceChild(newWrapper, activeWrapper);
+            // 2. Thay thế toàn bộ nội dung chính
+            const newMain = doc.querySelector('#main-content');
+            const oldMain = document.querySelector('#main-content');
+            if (newMain && oldMain) {
+                // Swap the whole main container (preserves any surrounding layout)
+                oldMain.replaceWith(newMain.cloneNode(true));
+            } else {
+                // Fallback – keep the existing .section-wrapper replacement logic
+                const newWrapper = doc.querySelector('.section-wrapper');
+                const activeWrapper = document.querySelector('.section-wrapper');
+                if (newWrapper && activeWrapper) {
+                    newWrapper.classList.add('fade-in');
+                    activeWrapper.parentNode.replaceChild(newWrapper, activeWrapper);
+                }
             }
 
             // 3. Cập nhật Title
@@ -151,7 +170,9 @@
                 executeScripts(newWrapper);
             }
 
-            // Tìm và chạy các scripts ở body của trang mới
+            // -------------------------------------------------
+            // 2️⃣ Inject scripts from the fetched page (tag them for later cleanup)
+            // -------------------------------------------------
             const bodyScripts = doc.querySelectorAll('body script');
             bodyScripts.forEach(oldScript => {
                 if (oldScript.src && oldScript.src.includes('router.js')) return;
@@ -159,27 +180,30 @@
 
                 const scriptSrc = oldScript.getAttribute('src');
                 if (scriptSrc) {
-                    // Loại bỏ script cũ cùng tên (nếu có) để nạp lại
+                    // Remove any existing script with the same src (except config.js)
                     const existing = document.querySelector(`script[src="${scriptSrc}"]`);
                     if (existing && !existing.src.includes('config.js')) {
                         existing.remove();
                     }
                     const newScript = document.createElement('script');
                     newScript.src = scriptSrc;
+                    // 👉 Mark it for future cleanup
+                    newScript.setAttribute('data-pjax', 'true');
                     document.body.appendChild(newScript);
                 } else {
                     const newScript = document.createElement('script');
                     newScript.textContent = oldScript.textContent;
+                    newScript.setAttribute('data-pjax', 'true');
                     document.body.appendChild(newScript);
                 }
             });
 
             // 7. Phát sự kiện seb:page-loaded để tái khởi tạo JS
             window.dispatchEvent(new CustomEvent('seb:page-loaded', { detail: { url } }));
-        // Re‑init room booking page when navigating to the booking page
-        if (url.includes('/Page/dang-ky-phong-hoc.html') && typeof window.initBookingPage === 'function') {
-            window.initBookingPage();
-        }
+            // ---- NEW ---- Run page‑specific initialization automatically
+            runPageInit(url);
+            // Reset scroll position so the new page starts at the top
+            window.scrollTo(0, 0);
 
             // Đồng bộ UI đăng nhập nếu có hệ thống Auth
             if (window.SEBAuth && typeof window.SEBAuth.syncAuthUi === 'function') {
@@ -208,6 +232,29 @@
                 link.classList.remove('active');
             }
         });
+    }
+
+    // -----------------------------------------------------------------------
+    // 5️⃣ Page‑specific init registry (global, near the top of the file)
+    // -----------------------------------------------------------------------
+    const pageInitMap = {
+        '/Page/dang-ky-phong-hoc.html': () => {
+            if (typeof window.initBookingPage === 'function') {
+                window.initBookingPage();
+            }
+        },
+        // Add more entries for other pages as needed
+    };
+
+    function runPageInit(url) {
+        const path = new URL(url, window.location.origin).pathname;
+        if (pageInitMap[path]) {
+            try {
+                pageInitMap[path]();
+            } catch (e) {
+                console.warn('PJAX page‑init failed for', path, e);
+            }
+        }
     }
 
     // Lắng nghe sự kiện click trên các thẻ nav-tab
