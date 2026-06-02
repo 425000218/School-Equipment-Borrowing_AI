@@ -50,7 +50,13 @@
                 await new Promise(resolve => setTimeout(resolve, 150));
             }
 
-            const response = await fetch(url);
+            // Abort any previous request and start a new one
+            if (activeAbortController) {
+                activeAbortController.abort();
+            }
+            const controller = new AbortController();
+            activeAbortController = controller;
+            const response = await fetch(url, { signal: controller.signal });
             if (!response.ok) {
                 window.location.href = url; // Fallback nếu tải qua Ajax lỗi
                 return;
@@ -121,9 +127,7 @@
             // Conditions to reload:
             // - `window.API_BASE_URL` is missing/empty OR
             // - `window.__configLoadedAtHost` doesn't match current hostname (host changed)
-            const needReloadConfig = !window.API_BASE_URL
-                || window.API_BASE_URL === ''
-                || (window.__configLoadedAtHost && window.__configLoadedAtHost !== window.location.hostname);
+            const needReloadConfig = (!window.API_BASE_URL || window.API_BASE_URL === '' || (window.__configLoadedAtHost && window.__configLoadedAtHost !== window.location.hostname)) && !configLoaded;
 
             if (needReloadConfig) {
                 const existingConfig = document.querySelector('script[src*="config.js"]');
@@ -133,7 +137,8 @@
                     const newConfigScript = document.createElement('script');
                     newConfigScript.src = '/Javascript/config.js?v=' + Date.now(); // cache-buster when reloading
                     newConfigScript.onload = () => {
-                        try { window.__configLoadedAtHost = window.location.hostname; } catch (e) { }
+                        try { window.__configLoadedAtHost = window.location.hostname; } catch (e) {}
+                        configLoaded = true;
                         resolve();
                     };
                     newConfigScript.onerror = () => resolve(); // continue even if config fails
@@ -178,6 +183,10 @@
             }
 
         } catch (error) {
+            if (error.name === 'AbortError') {
+                // Navigation was aborted – silently ignore
+                return;
+            }
             console.error('PJAX error, loading page standard:', error);
             window.location.href = url;
         }
