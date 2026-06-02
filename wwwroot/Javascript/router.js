@@ -176,6 +176,10 @@
 
             // 7. Phát sự kiện seb:page-loaded để tái khởi tạo JS
             window.dispatchEvent(new CustomEvent('seb:page-loaded', { detail: { url } }));
+        // Re‑init room booking page when navigating to the booking page
+        if (url.includes('/Page/dang-ky-phong-hoc.html') && typeof window.initBookingPage === 'function') {
+            window.initBookingPage();
+        }
 
             // Đồng bộ UI đăng nhập nếu có hệ thống Auth
             if (window.SEBAuth && typeof window.SEBAuth.syncAuthUi === 'function') {
