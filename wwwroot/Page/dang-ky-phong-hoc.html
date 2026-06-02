@@ -97,12 +97,27 @@
               </select>
               <i class="fas fa-chevron-down field-arrow"></i>
             </div>
-            <div class="input-field">
-              <select name="room-number" id="room-number-select">
-                <option value="" disabled selected>Số phòng</option>
-              </select>
-              <i class="fas fa-chevron-down field-arrow"></i>
-            </div>
+              <div class="input-field">
+                <select name="room-number" id="room-number-select">
+                  <option value="" disabled selected>Số phòng</option>
+                </select>
+                <i class="fas fa-chevron-down field-arrow"></i>
+              </div>
+
+              <!-- Teacher selection -->
+              <div class="input-field">
+                <select name="teacher" id="teacher-select">
+                  <option value="" disabled selected>Giáo viên</option>
+                  <option value="gv-a">GV. Nguyễn Văn A</option>
+                  <option value="gv-b">GV. Trần Thị B</option>
+                </select>
+                <i class="fas fa-chevron-down field-arrow"></i>
+              </div>
+
+              <!-- Booking date input -->
+              <div class="input-field">
+                <input type="date" id="booking-date-input" />
+              </div>
           </div>
 
           <div class="sidebar-block">
@@ -265,7 +280,7 @@
   <!-- 🔐 AUTH & ROUTING -->
   <script src="/Javascript/auth.js"></script>
   <script src="/Javascript/Java.js"></script>
-  <script src="/Javascript/dang-ky-phong.js"></script>
+  <script type="module" src="/Javascript/dang-ky-phong.js"></script>
   <script src="/Javascript/router.js"></script>
   <script src="/Javascript/ui-improvements.js"></script>
 </body>

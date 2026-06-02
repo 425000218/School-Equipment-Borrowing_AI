@@ -18,6 +18,7 @@ export async function initBookingPage() {
     const submitBtn = document.querySelector('.btn-submit-booking');
     const roomTypeSelect = document.getElementById('room-type-select');
     const roomNumberSelect = document.getElementById('room-number-select');
+    const teacherSelect = document.getElementById('teacher-select');
     const bookingDateInput = document.getElementById('booking-date-input');
     const prevWeekBtn = document.getElementById('prev-week-btn');
     const nextWeekBtn = document.getElementById('next-week-btn');
@@ -29,10 +30,10 @@ export async function initBookingPage() {
     if (bookingDateInput) bookingDateInput.value = formatYMD(new Date());
     bindSlotButtons(slotButtons);
     bindNavigation(prevWeekBtn, nextWeekBtn, bookingDateInput, currentMonday, () => updateWeekHeaders(currentMonday, currentWeekLabel), loadBookings);
-    bindSubmit(submitBtn, getSelectedSlots, roomNumberSelect, purposeTextarea, loadBookings);
+    bindSubmit(submitBtn, getSelectedSlots, roomNumberSelect, teacherSelect, purposeTextarea, loadBookings, currentMonday);
 
     // Load dropdowns then initial bookings
-    await loadLookups(roomTypeSelect, roomNumberSelect);
+    await loadLookups(roomTypeSelect, roomNumberSelect, teacherSelect);
     await loadBookings();
 
     async function loadBookings() {

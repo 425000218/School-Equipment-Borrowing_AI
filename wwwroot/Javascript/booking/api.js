@@ -3,9 +3,9 @@
 
 import { formatYMD } from './helpers.js';
 
-export async function loadLookups(roomTypeSelect, roomNumberSelect) {
-    // Example placeholder: populate selects; real implementation would fetch from server.
-    // For now, assume static options are already in HTML.
+export async function loadLookups(roomTypeSelect, roomNumberSelect, teacherSelect) {
+    // Placeholder: static options are already in HTML, but this function can be extended to fetch dynamic data.
+    // Currently does nothing; returns a resolved promise.
     return Promise.resolve();
 }
 

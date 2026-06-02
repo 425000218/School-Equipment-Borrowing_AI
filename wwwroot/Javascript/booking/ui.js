@@ -1,4 +1,6 @@
 // booking/ui.js
+import { formatDM, formatYMD, getColumnDateStr } from './helpers.js';
+import { postBooking } from './api.js';
 // UI handling for the booking page – event binding, week header updates, slot selection, and rendering.
 
 export function updateWeekHeaders(currentMonday, currentWeekLabel) {
@@ -6,6 +8,15 @@ export function updateWeekHeaders(currentMonday, currentWeekLabel) {
     friday.setDate(currentMonday.getDate() + 4);
     if (currentWeekLabel) {
         currentWeekLabel.innerText = `${formatDM(currentMonday)} - ${formatDM(friday)} (${currentMonday.getFullYear()})`;
+    }
+    // Update day headers (Tue-Sat)
+    for (let i = 2; i <= 6; i++) {
+        const dayElem = document.getElementById(`day-${i}`);
+        if (dayElem) {
+            const date = new Date(currentMonday);
+            date.setDate(currentMonday.getDate() + (i - 2));
+            dayElem.innerText = `T${i} ${formatYMD(date)}`;
+        }
     }
 }
 
@@ -53,13 +64,15 @@ export function bindNavigation(prevWeekBtn, nextWeekBtn, bookingDateInput, curre
     }
 }
 
-export function bindSubmit(submitBtn, getSelectedSlots, roomNumberSelect, purposeTextarea, fetchBookings) {
+export function bindSubmit(submitBtn, getSelectedSlots, roomNumberSelect, teacherSelect, purposeTextarea, fetchBookings, currentMonday) {
     if (!submitBtn) return;
     submitBtn.addEventListener('click', async function () {
         const selectedSlots = getSelectedSlots();
         const roomCode = roomNumberSelect ? roomNumberSelect.value : '';
+        const teacher = teacherSelect ? teacherSelect.value : '';
         const purpose = purposeTextarea ? (purposeTextarea.value || '').trim() : '';
         if (!roomCode) { alert('Vui lòng chọn số phòng học!'); return; }
+        if (!teacher) { alert('Vui lòng chọn giáo viên!'); return; }
         if (selectedSlots.length === 0) { alert('Vui lòng chọn ít nhất một tiết học trống!'); return; }
         submitBtn.disabled = true;
         submitBtn.innerText = 'Đang xử lý...';
@@ -70,7 +83,7 @@ export function bindSubmit(submitBtn, getSelectedSlots, roomNumberSelect, purpos
             const slot = slotBtn.getAttribute('data-slot');
             const bookingDate = getColumnDateStr(currentMonday, dayIndex);
             try {
-                const response = await postBooking(roomCode, bookingDate, slot, purpose);
+                const response = await postBooking(roomCode, bookingDate, slot, purpose, teacher);
                 if (response.ok) {
                     successCount++;
                 } else {
