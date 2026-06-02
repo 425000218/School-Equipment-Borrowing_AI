@@ -34,6 +34,8 @@ if (document.readyState === 'loading') {
     initUserDashboard();
 }
 window.addEventListener('seb:page-loaded', initUserDashboard);
+window.addEventListener('pjax:complete', loadUserProfile);
+window.addEventListener('pjax:end', loadUserProfile);
 
 function loadUserProfile() {
     const user = window.SEBAuth.getUser();
@@ -41,10 +43,12 @@ function loadUserProfile() {
     
     // Populate profile fields safely with fallbacks
     const username = user.username || '';
-    const fullName = user.fullName || user.fullname || username;
+    const fullName = user.fullName || user.fullname || user.full_name || username;
     const role = user.role || '';
-    document.getElementById('prof-username').value = username;
-    document.getElementById('prof-fullname').value = fullName;
+    const profUsername = document.getElementById('prof-username');
+    const profFullname = document.getElementById('prof-fullname');
+    if (profUsername) profUsername.value = username;
+    if (profFullname) profFullname.value = fullName;
     const sidebarName = document.getElementById('sidebar-fullname');
     const sidebarRole = document.getElementById('sidebar-role');
     if (sidebarName) sidebarName.innerText = fullName || username || 'Giáo viên';

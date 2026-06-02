@@ -35,7 +35,6 @@
 
 .sidebar {
   width: 100%;
-  max-width: 250px;
   background-color: #ffffff;
   padding: 20px;
   border-right: 1px solid var(--card-border);
