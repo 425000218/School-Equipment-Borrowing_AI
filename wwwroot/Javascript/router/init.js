@@ -17,6 +17,17 @@ export function updateNavActiveState(url) {
 // Page‑specific init map – can be extended by other modules.
 export const pageInitMap = {
     '/Page/dang-ky-phong-hoc.html': () => {
+        // Dynamically import the booking module as an ES module
+        import('/Javascript/dang-ky-phong.js')
+            .then(() => {
+                if (typeof window.initBookingPage === 'function') {
+                    window.initBookingPage();
+                }
+            })
+            .catch(err => console.error('Lỗi nạp module phòng học:', err));
+    },
+    // add other pages here
+    '/Page/dang-ky-phong-hoc.html': () => {
         if (typeof window.initBookingPage === 'function') {
             window.initBookingPage();
         }

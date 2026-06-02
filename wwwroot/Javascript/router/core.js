@@ -69,6 +69,8 @@ export async function loadPage(url, pushState = true) {
             const newWrapper = doc.querySelector('.section-wrapper');
             const activeWrapper = document.querySelector('.section-wrapper');
             if (newWrapper && activeWrapper) {
+                // Ensure old content is fully cleared to avoid duplication
+                activeWrapper.innerHTML = '';
                 newWrapper.classList.add('fade-in');
                 activeWrapper.parentNode.replaceChild(newWrapper, activeWrapper);
             }
@@ -98,11 +100,19 @@ export async function loadPage(url, pushState = true) {
                 if (existing && !existing.src.includes('config.js')) existing.remove();
                 const newScript = document.createElement('script');
                 newScript.src = scriptSrc;
+                // Preserve module type if the original script was a module
+                if (oldScript.type === 'module') {
+                    newScript.type = 'module';
+                }
                 newScript.setAttribute('data-pjax', 'true');
                 document.body.appendChild(newScript);
             } else {
                 const newScript = document.createElement('script');
                 newScript.textContent = oldScript.textContent;
+                // Preserve module type for inline scripts
+                if (oldScript.type === 'module') {
+                    newScript.type = 'module';
+                }
                 newScript.setAttribute('data-pjax', 'true');
                 document.body.appendChild(newScript);
             }
