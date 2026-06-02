@@ -138,8 +138,44 @@ export function renderBookingList(container, bookings) {
         const room = b.roomCode || '';
         const purpose = b.purpose || '';
         const teacher = b.teacher || '';
-        item.innerHTML = `<strong>Phòng ${room}</strong> - ${dateStr} - ${slotStr}<br/>Mục đích: ${purpose}<br/>Giáo viên: ${teacher}`;
+        item.innerHTML = `<strong>Phòng ${room}</strong> - ${dateStr} - ${slotStr}<br/>Mục đích: ${purpose}<br/>Người đăng ký: ${teacher}`;
         container.appendChild(item);
     });
 }
+
+// Apply booked slots to the timetable UI and lock them
+export function applyBookingsToUI(bookings, currentMonday) {
+    // Clear previous busy states
+    const slotButtons = document.querySelectorAll('.slot-btn');
+    slotButtons.forEach(btn => {
+        if (btn.classList.contains('busy')) {
+            btn.classList.remove('busy');
+            btn.style.backgroundColor = '';
+            btn.innerText = 'Trống';
+        }
+        // Also clear any previous selection state
+        if (btn.classList.contains('selected')) {
+            btn.classList.remove('selected');
+            btn.style.backgroundColor = '';
+            btn.innerText = 'Trống';
+        }
+    });
+
+    // Apply new bookings
+    bookings.forEach(b => {
+        if (!b.bookingDate || !b.slot) return;
+        const bookingDate = new Date(b.bookingDate);
+        // Compute day index relative to the currentMonday (Tue=2 .. Sat=6)
+        const diffDays = Math.floor((bookingDate - currentMonday) / (1000 * 60 * 60 * 24));
+        const dayIndex = diffDays + 2; // Monday is base, Tuesday should be 2
+        const selector = `.slot-btn[data-day-index="${dayIndex}"][data-slot="${b.slot}"]`;
+        const btn = document.querySelector(selector);
+        if (btn) {
+            btn.classList.add('busy');
+            btn.style.backgroundColor = '#ef4444'; // red to indicate booked
+            btn.innerText = 'Đã đặt';
+        }
+    });
+}
+
 
